@@ -1,5 +1,7 @@
 # AILinux Helper brand
 
-The canonical visual is the new **AILinux Helper** combined-platform artwork: central AILinux mark with Android, Linux, Windows, macOS/Apple, desktop and web/globe context on the AILinux blue/cyan dark visual language.
+Canonical app mark: `ailinux-helper-base.svg`. It is intentionally text-free and high contrast so the A/orbit/star identity survives launcher, tray and 16 px contexts.
 
-`legacy-favicon.png` is retained only as a compatibility/fallback package asset. Platform exports of the new master artwork belong here as `ailinux-helper-master.png`, `icon-512.png`, Android mipmaps, Windows `.ico` and macOS `.icns`.
+`ailinux-helper-master.png` is the generated visual reference/master artwork. Platform exports are generated from the SVG into `assets/icons/png`, `assets/desktop`, Android `mipmap-*`, and `assets/ios/AppIcon.appiconset`.
+
+Do not use the old `legacy-favicon.png` for new packages; it remains only for compatibility/reference.

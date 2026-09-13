@@ -1,6 +1,7 @@
 'use strict';
 
 const { app, BrowserWindow, Menu, Tray, nativeImage, Notification, powerSaveBlocker, session, shell } = require('electron');
+const path = require('path');
 
 const APP_NAME = 'AILinux Helper';
 const START_URL = 'https://api.ailinux.me/v1/mcp';
@@ -72,12 +73,12 @@ function configureSession(ses) {
 }
 
 function trayImage() {
-  const svg = encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-      <rect width="32" height="32" rx="7" fill="#16181d"/>
-      <path d="M8 9h16v4H18v11h-4V13H8z" fill="#8bd450"/>
-    </svg>`);
-  return nativeImage.createFromDataURL(`data:image/svg+xml;charset=utf-8,${svg}`);
+  const candidates = [path.join(process.resourcesPath, 'icon.png'), path.join(__dirname, '../../assets/desktop/icon.png')];
+  for (const candidate of candidates) {
+    const image = nativeImage.createFromPath(candidate);
+    if (!image.isEmpty()) return image.resize({ width: 24, height: 24 });
+  }
+  return nativeImage.createEmpty();
 }
 
 function showWindow() {

@@ -71,7 +71,13 @@
       ],
       "category": "public.app-category.developer-tools",
       "icon": "../../assets/desktop/icon-macos-1024.png"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "../../assets/desktop/icon.png",
+        "to": "icon.png"
+      }
+    ]
   },
   "author": {
     "name": "AILinux",

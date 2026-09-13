@@ -59,3 +59,8 @@ test('desktop tray exposes connection status and notifications', () => {
   assert.match(source, /new Notification/);
   assert.match(source, /setInterval\(pollConnectionState, 4000\)/);
 });
+
+test('desktop helper ships and loads the branded tray icon', () => {
+  assert.match(source, /nativeImage\.createFromPath/);
+  assert.match(source, /assets\/desktop\/icon\.png/);
+});

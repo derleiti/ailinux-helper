@@ -36,6 +36,8 @@ final class ProtocolClient extends WebSocketListener {
         catch(Exception e){connecting.set(false);listener.onState("Workspace unavailable: "+e.getMessage());return;}
         listener.onState("Connecting executor…");
         if(!handoffCode.isEmpty()){openSocket("handoff_code",handoffCode);return;}
+        String pair=state.pairCode();
+        if(pair!=null&&!pair.isEmpty()){listener.onPairCode(pair);openSocket("pair_code",pair);return;}
         String resume=state.resumeToken();
         if(resume!=null&&!resume.isEmpty()){
             final RequestBody body;
@@ -56,8 +58,6 @@ final class ProtocolClient extends WebSocketListener {
             });
             return;
         }
-        String pair=state.pairCode();
-        if(pair!=null&&!pair.isEmpty()){listener.onPairCode(pair);openSocket("pair_code",pair);return;}
         createPairTicket();
     }
     private void createPairTicket(){
