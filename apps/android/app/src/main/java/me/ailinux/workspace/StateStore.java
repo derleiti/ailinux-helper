@@ -25,6 +25,7 @@ final class StateStore {
         editor.apply();
     }
     String pairCode() { return prefs.getString("pair_code", ""); }
+    void clearPairCode() { prefs.edit().remove("pair_code").apply(); }
     void setResumeToken(String token) { prefs.edit().putString("resume_token", token == null ? "" : token).apply(); }
     String resumeToken() { return prefs.getString("resume_token", ""); }
     void clearCredentials() { prefs.edit().remove("pair_code").remove("resume_token").apply(); }

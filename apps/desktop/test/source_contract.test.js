@@ -80,3 +80,13 @@ test('native helper IPC rejects untrusted renderer origins', () => {
   assert.match(source, /assertTrustedIpc/);
   assert.match(source, /isTrustedDocument\(senderUrl\)/);
 });
+
+test('android helper discards expired pair credentials without deleting durable resume state', () => {
+  const protocol = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
+  const stateStore = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'StateStore.java'), 'utf8');
+  assert.match(protocol, /code==4003/);
+  assert.match(protocol, /workspace credential/);
+  assert.match(protocol, /state\.clearPairCode\(\)/);
+  assert.match(stateStore, /void clearPairCode\(\).*remove\("pair_code"\)/s);
+  assert.doesNotMatch(stateStore.match(/void clearPairCode\(\).*?\}/s)?.[0] || '', /resume_token/);
+});
