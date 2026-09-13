@@ -122,8 +122,8 @@ test('android folder changes rebind the live share while fresh pairing stays exp
   assert.match(activity, /Stop sharing workspace/);
   assert.match(activity, /ACTION_RECONNECT/);
   assert.match(service, /ACTION_NEW_PAIR/);
-  assert.match(service, /ACTION_RECONNECT\.equals\(intent\.getAction\(\)\)\)\{client\.stop\(false\);client\.start\(\)/);
-  assert.match(service, /ACTION_NEW_PAIR\.equals\(intent\.getAction\(\)\)\)\{client\.stop\(true\);client\.start\(\)/);
+  assert.match(service, /ACTION_RECONNECT\.equals\(action\)\)\{client\.stop\(false\);client\.start\(\)/);
+  assert.match(service, /ACTION_NEW_PAIR\.equals\(action\)\)\{client\.stop\(true\);client\.start\(\)/);
   const setTree = stateStore.match(/boolean setTree\(Uri uri\)[\s\S]*?return changed;\s*\}/)?.[0] || '';
   assert.match(setTree, /putString\("tree_uri", next\)/);
   assert.doesNotMatch(setTree, /pair_code|resume_token/);
@@ -170,7 +170,8 @@ test('android share profile supports native-only resource advertisement and remo
   const protocol = fs.readFileSync(path.join(root, 'ProtocolClient.java'), 'utf8');
   const stateStore = fs.readFileSync(path.join(root, 'StateStore.java'), 'utf8');
   const activity = fs.readFileSync(path.join(root, 'MainActivity.java'), 'utf8');
-  assert.match(protocol, /if\(state\.tree\(\)==null\)return out/);
+  assert.match(protocol, /if\(state\.tree\(\)!=null\)\{/);
+  assert.match(protocol, /boolean nativeCapability=/);
   for (const cap of ['workspace_info','file_read','file_tree','code_read','code_tree','code_search','code_grep','file_ops']) assert.ok(protocol.includes(`.put("${cap}")`), `missing Android read capability: ${cap}`);
   for (const cap of ['file_edit','directory_create','workspace_clear','code_edit']) assert.ok(protocol.includes(`.put("${cap}")`), `missing Android write capability: ${cap}`);
   assert.match(protocol, /state\.resourceAdvertise\(\)/);
@@ -234,4 +235,48 @@ test('typed local service control exposes only allowlisted service operations', 
   assert.match(main, /unsupported typed service operation/);
   assert.match(preload, /serviceList:/);
   assert.match(preload, /serviceAction:/);
+});
+
+test('android vision and clipboard shares are explicit opt-in capabilities', () => {
+  const root = path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main');
+  const javaRoot = path.join(root, 'java', 'me', 'ailinux', 'workspace');
+  const protocol = fs.readFileSync(path.join(javaRoot, 'ProtocolClient.java'), 'utf8');
+  const stateStore = fs.readFileSync(path.join(javaRoot, 'StateStore.java'), 'utf8');
+  const activity = fs.readFileSync(path.join(javaRoot, 'MainActivity.java'), 'utf8');
+  const manifest = fs.readFileSync(path.join(root, 'AndroidManifest.xml'), 'utf8');
+  const capture = fs.readFileSync(path.join(javaRoot, 'ScreenCapture.java'), 'utf8');
+
+  for (const cap of ['computer_observe', 'computer_screenshot', 'clipboard_read', 'clipboard_write']) {
+    assert.ok(protocol.includes(`out.put("${cap}")`) || protocol.includes(`.put("${cap}")`), `missing Android native capability: ${cap}`);
+  }
+  assert.match(protocol, /state\.screenObserve\(\).*screenCapture\.isReady\(\)/);
+  assert.match(protocol, /state\.clipboardRead\(\)/);
+  assert.match(protocol, /state\.clipboardWrite\(\)/);
+  assert.match(protocol, /case"computer_observe":case"computer_screenshot"/);
+  assert.match(protocol, /case"clipboard_read"/);
+  assert.match(protocol, /case"clipboard_write"/);
+  assert.match(protocol, /new JSONObject\(\)\.put\("type","image"\).*put\("mimeType",mime\)/);
+  assert.match(protocol, /structured\.remove\("data"\)/);
+
+  assert.match(stateStore, /static volatile boolean screenObserveSession = false/);
+  assert.doesNotMatch(stateStore, /putBoolean\("screen_observe"/);
+  assert.match(stateStore, /clipboard_read/);
+  assert.match(stateStore, /clipboard_write/);
+  assert.match(activity, /Share display \/ vision observation/);
+  assert.match(activity, /Share clipboard read/);
+  assert.match(activity, /Share clipboard write/);
+  assert.match(activity, /createScreenCaptureIntent/);
+  assert.match(manifest, /FOREGROUND_SERVICE_MEDIA_PROJECTION/);
+  assert.match(manifest, /specialUse\|mediaProjection/);
+  assert.match(capture, /MediaProjectionManager/);
+  assert.match(capture, /ImageReader\.newInstance/);
+  assert.match(capture, /Bitmap\.CompressFormat\.PNG/);
+  assert.match(capture, /Base64\.NO_WRAP/);
+});
+
+test('android display projection callbacks cannot revoke a replacement projection', () => {
+  const capture = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'ScreenCapture.java'), 'utf8');
+  assert.match(capture, /final MediaProjection ownedProjection = next/);
+  assert.match(capture, /if \(projection != ownedProjection\) return/);
+  assert.match(capture, /thread\.quitSafely\(\)/);
 });

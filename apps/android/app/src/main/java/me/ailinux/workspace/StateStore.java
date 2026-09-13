@@ -6,6 +6,8 @@ import android.net.Uri;
 
 final class StateStore {
     private static final String PREFS = "workspace_state";
+    // MediaProjection consent cannot be persisted/replayed across process death.
+    private static volatile boolean screenObserveSession = false;
     private final SharedPreferences prefs;
     StateStore(Context context) { prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
     boolean setTree(Uri uri) {
@@ -34,6 +36,12 @@ final class StateStore {
     boolean resourceAdvertise() { return prefs.getBoolean("resource_advertise", false); }
     void setRemoteCompute(boolean enabled) { prefs.edit().putBoolean("remote_compute", enabled).apply(); }
     boolean remoteCompute() { return prefs.getBoolean("remote_compute", false); }
+    void setScreenObserve(boolean enabled) { screenObserveSession = enabled; }
+    boolean screenObserve() { return screenObserveSession; }
+    void setClipboardRead(boolean enabled) { prefs.edit().putBoolean("clipboard_read", enabled).apply(); }
+    boolean clipboardRead() { return prefs.getBoolean("clipboard_read", false); }
+    void setClipboardWrite(boolean enabled) { prefs.edit().putBoolean("clipboard_write", enabled).apply(); }
+    boolean clipboardWrite() { return prefs.getBoolean("clipboard_write", false); }
     void setVisibility(String visibility) {
         String value = "public".equals(visibility) || "unlisted".equals(visibility) ? visibility : "private";
         prefs.edit().putString("visibility", value).apply();

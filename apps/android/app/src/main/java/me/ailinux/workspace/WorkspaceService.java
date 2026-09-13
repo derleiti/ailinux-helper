@@ -2,15 +2,18 @@ package me.ailinux.workspace;
 
 import android.app.*;
 import android.content.*;
+import android.content.pm.ServiceInfo;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.os.*;
 import androidx.core.app.NotificationCompat;
 
 public class WorkspaceService extends Service implements ProtocolClient.Listener {
-    public static final String ACTION_START="me.ailinux.workspace.START",ACTION_RECONNECT="me.ailinux.workspace.RECONNECT",ACTION_NEW_PAIR="me.ailinux.workspace.NEW_PAIR",ACTION_STOP="me.ailinux.workspace.STOP",EXTRA_HANDOFF="handoff_code";
+    public static final String ACTION_START="me.ailinux.workspace.START",ACTION_RECONNECT="me.ailinux.workspace.RECONNECT",ACTION_NEW_PAIR="me.ailinux.workspace.NEW_PAIR",ACTION_ENABLE_SCREEN="me.ailinux.workspace.ENABLE_SCREEN",ACTION_DISABLE_SCREEN="me.ailinux.workspace.DISABLE_SCREEN",ACTION_STOP="me.ailinux.workspace.STOP",EXTRA_HANDOFF="handoff_code",EXTRA_CAPTURE_RESULT="capture_result",EXTRA_CAPTURE_DATA="capture_data";
     private static final String CHANNEL="workspace_executor";
     private ProtocolClient client;
+    private ScreenCapture screenCapture;
+    private StateStore state;
     private PowerManager.WakeLock wakeLock;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
@@ -18,7 +21,14 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
     @Override public void onCreate(){
         super.onCreate();
         createChannel();
-        client=new ProtocolClient(this,this);
+        state=new StateStore(this);
+        screenCapture=new ScreenCapture(this,()->new Handler(Looper.getMainLooper()).post(()->{
+            state.setScreenObserve(false);
+            if(client!=null){client.stop(false);client.start();}
+            onState("Display observation stopped by Android");
+            updateForeground("Workspace executor active",false);
+        }));
+        client=new ProtocolClient(this,this,screenCapture);
         connectivityManager=getSystemService(ConnectivityManager.class);
         if(connectivityManager!=null){
             networkCallback=new ConnectivityManager.NetworkCallback(){
@@ -29,17 +39,46 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
     }
 
     @Override public int onStartCommand(Intent intent,int flags,int startId){
-        if(intent!=null&&ACTION_STOP.equals(intent.getAction())){
-            client.stop(true);
+        String action=intent==null?ACTION_START:intent.getAction();
+        if(ACTION_STOP.equals(action)){
+            if(client!=null)client.stop(true);
+            if(screenCapture!=null)screenCapture.stop();
+            state.setScreenObserve(false);
             releaseWakeLock();
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
         }
         acquireWakeLock();
-        startForeground(8606,notification("Starting workspace executor…"));
-        if(intent!=null&&ACTION_RECONNECT.equals(intent.getAction())){client.stop(false);client.start();return START_STICKY;}
-        if(intent!=null&&ACTION_NEW_PAIR.equals(intent.getAction())){client.stop(true);client.start();return START_STICKY;}
+        updateForeground("Starting workspace executor…",false);
+
+        if(ACTION_ENABLE_SCREEN.equals(action)){
+            int result=intent==null?Activity.RESULT_CANCELED:intent.getIntExtra(EXTRA_CAPTURE_RESULT,Activity.RESULT_CANCELED);
+            Intent data=Build.VERSION.SDK_INT>=33?intent.getParcelableExtra(EXTRA_CAPTURE_DATA,Intent.class):intent.getParcelableExtra(EXTRA_CAPTURE_DATA);
+            try{
+                updateForeground("Display observation active",true);
+                screenCapture.start(result,data);
+                state.setScreenObserve(true);
+                client.stop(false);client.start();
+                onState("Display / vision observation shared");
+            }catch(Exception e){
+                state.setScreenObserve(false);
+                screenCapture.stop();
+                updateForeground("Workspace executor active",false);
+                onState("Display sharing failed · "+e.getMessage());
+            }
+            return START_STICKY;
+        }
+        if(ACTION_DISABLE_SCREEN.equals(action)){
+            state.setScreenObserve(false);
+            screenCapture.stop();
+            updateForeground("Workspace executor active",false);
+            client.stop(false);client.start();
+            onState("Display / vision observation revoked");
+            return START_STICKY;
+        }
+        if(ACTION_RECONNECT.equals(action)){client.stop(false);client.start();return START_STICKY;}
+        if(ACTION_NEW_PAIR.equals(action)){client.stop(true);client.start();return START_STICKY;}
         String handoff=intent==null?null:intent.getStringExtra(EXTRA_HANDOFF);
         if(handoff!=null&&!handoff.isEmpty())client.setHandoffCode(handoff);
         client.start();
@@ -47,7 +86,6 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
     }
 
     @Override public void onTaskRemoved(Intent rootIntent){
-        // The executor is intentionally user-enabled and must outlive closing/swiping the UI.
         if(client!=null)client.onNetworkAvailable();
         super.onTaskRemoved(rootIntent);
     }
@@ -55,13 +93,25 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
     @Override public void onDestroy(){
         if(connectivityManager!=null&&networkCallback!=null){try{connectivityManager.unregisterNetworkCallback(networkCallback);}catch(Exception ignored){}}
         if(client!=null)client.stop(false);
+        if(screenCapture!=null)screenCapture.shutdown();
         releaseWakeLock();
         super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent){return null;}
-    @Override public void onState(String state){getSystemService(NotificationManager.class).notify(8606,notification(state));sendBroadcast(new Intent("me.ailinux.workspace.STATE").setPackage(getPackageName()).putExtra("state",state));}
+    @Override public void onState(String value){getSystemService(NotificationManager.class).notify(8606,notification(value));sendBroadcast(new Intent("me.ailinux.workspace.STATE").setPackage(getPackageName()).putExtra("state",value));}
     @Override public void onResumeToken(String token){}
     @Override public void onPairCode(String code){sendBroadcast(new Intent("me.ailinux.workspace.STATE").setPackage(getPackageName()).putExtra("pair_code",code));getSystemService(NotificationManager.class).notify(8606,notification("Pair code · "+code));}
+
+    private void updateForeground(String text,boolean mediaProjection){
+        Notification n=notification(text);
+        if(mediaProjection&&Build.VERSION.SDK_INT>=29){
+            int types=ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION;
+            if(Build.VERSION.SDK_INT>=34)types|=ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE;
+            startForeground(8606,n,types);
+        }else if(Build.VERSION.SDK_INT>=34){
+            startForeground(8606,n,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        }else startForeground(8606,n);
+    }
 
     private void acquireWakeLock(){
         if(wakeLock!=null&&wakeLock.isHeld())return;
