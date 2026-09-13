@@ -51,3 +51,11 @@ test('trusted MCP origin can write clipboard and request wake lock', () => {
   assert.match(source, /screen-wake-lock/);
   assert.match(source, /trustedPermissions\.has\(permission\) && isTrustedDocument/);
 });
+
+
+test('desktop tray exposes connection status and notifications', () => {
+  assert.match(source, /Status: \${connectionState}/);
+  assert.match(source, /pollConnectionState/);
+  assert.match(source, /new Notification/);
+  assert.match(source, /setInterval\(pollConnectionState, 4000\)/);
+});

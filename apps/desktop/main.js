@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, Tray, nativeImage, powerSaveBlocker, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, Notification, powerSaveBlocker, session, shell } = require('electron');
 
 const APP_NAME = 'AILinux Helper';
 const START_URL = 'https://api.ailinux.me/v1/mcp';
@@ -15,6 +15,9 @@ let tray = null;
 let quitting = false;
 let powerBlockerId = null;
 let pendingDeepLink = null;
+let connectionState = 'Starting';
+let lastNotifiedState = '';
+let statusTimer = null;
 
 function safeTarget(value) {
   try {
@@ -91,25 +94,46 @@ async function navigate(target) {
   showWindow();
 }
 
-function createTray() {
-  tray = new Tray(trayImage());
-  tray.setToolTip(`${APP_NAME} · ${PLATFORM_LABEL} workspace helper`);
+function rebuildTrayMenu() {
+  if (!tray) return;
+  tray.setToolTip(`${APP_NAME} · ${PLATFORM_LABEL} · ${connectionState}`);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open AILinux Helper', click: showWindow },
+    { label: `Status: ${connectionState}`, enabled: false },
     { label: `Platform: ${PLATFORM_LABEL}`, enabled: false },
-    { label: 'Reconnect workspace', click: () => window?.webContents.reloadIgnoringCache() },
     { type: 'separator' },
+    { label: 'Reconnect workspace', click: () => window?.webContents.reloadIgnoringCache() },
     { label: 'Open MCP URL in default browser', click: () => shell.openExternal(START_URL) },
     { type: 'separator' },
-    {
-      label: 'Quit AILinux Helper',
-      click: () => {
-        quitting = true;
-        app.quit();
-      },
-    },
+    { label: 'Quit AILinux Helper', click: () => { quitting = true; app.quit(); } },
   ]));
+}
+
+function updateConnectionState(next) {
+  const normalized = String(next || 'Unknown').replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (!normalized || normalized === connectionState) return;
+  connectionState = normalized;
+  rebuildTrayMenu();
+  const important = /connected|reconnected|offline|disconnected|lost|expired|reconnecting|suspended/i.test(normalized);
+  if (important && normalized !== lastNotifiedState && Notification.isSupported()) {
+    lastNotifiedState = normalized;
+    new Notification({ title: APP_NAME, body: normalized, silent: true }).show();
+  }
+}
+
+async function pollConnectionState() {
+  if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+  try {
+    const text = await window.webContents.executeJavaScript(`document.getElementById('status')?.textContent || ''`, true);
+    if (text) updateConnectionState(text);
+  } catch {}
+}
+
+function createTray() {
+  tray = new Tray(trayImage());
+  rebuildTrayMenu();
   tray.on('click', showWindow);
+  statusTimer = setInterval(pollConnectionState, 4000);
 }
 
 function createWindow() {
@@ -191,6 +215,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     quitting = true;
+    if (statusTimer) clearInterval(statusTimer);
     if (powerBlockerId !== null && powerSaveBlocker.isStarted(powerBlockerId)) {
       powerSaveBlocker.stop(powerBlockerId);
     }

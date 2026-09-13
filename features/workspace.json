@@ -1,1 +1,39 @@
-{"id":"workspace","name":"Local MCP Workspace","status":"stable","entrypoint":"https://api.ailinux.me/v1/mcp","capabilities":["workspace-pairing","durable-lease","native-local-files","read-write","foreground-executor","tray-executor","deep-link-handoff"],"protocols":["ailinux-helper","ailinux-workspace"],"platforms":["android","linux","windows","macos","web"]}
+{
+  "id": "workspace",
+  "name": "Local MCP Workspace",
+  "status": "stable",
+  "entrypoint": "https://api.ailinux.me/v1/mcp",
+  "capabilities": [
+    "workspace-pairing",
+    "durable-lease",
+    "native-local-files",
+    "read-write",
+    "foreground-executor",
+    "tray-executor",
+    "deep-link-handoff"
+  ],
+  "protocols": [
+    "ailinux-helper",
+    "ailinux-workspace"
+  ],
+  "platforms": [
+    "android",
+    "linux",
+    "windows",
+    "macos",
+    "web"
+  ],
+  "version": "2.88.0",
+  "lifecycle": {
+    "desktop": "tray-resident transport",
+    "android": "foreground-service transport",
+    "ios": "durable lease + suspend/resume",
+    "web": "best-effort resume"
+  },
+  "connection_states": [
+    "connected",
+    "reconnecting",
+    "suspended",
+    "offline"
+  ]
+}
