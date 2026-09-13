@@ -5,8 +5,14 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
 
 const backends = require('../shell_backends');
+
+function dockerCliAvailable() {
+  const result = spawnSync('docker', ['--version'], { stdio: 'ignore' });
+  return !result.error && result.status === 0;
+}
 
 function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'loom-shell-'));
@@ -135,19 +141,22 @@ test('a released workspace defaults to read-only when no mode is chosen', () => 
   assert.equal(backends.status().workspaceMode, 'read_only');
 });
 
-test('a read-only share mounts the workspace immutably', () => {
+test('a read-only share mounts the workspace immutably', (t) => {
+  if (!dockerCliAvailable()) return t.skip('docker CLI not installed on this runner');
   const plan = dockerPlan('read_only');
   const mount = plan.args[plan.args.indexOf('-v') + 1];
   assert.ok(mount.endsWith(':/workspace:ro'), `expected a read-only mount, got ${mount}`);
 });
 
-test('a read/write share mounts the workspace writable', () => {
+test('a read/write share mounts the workspace writable', (t) => {
+  if (!dockerCliAvailable()) return t.skip('docker CLI not installed on this runner');
   const plan = dockerPlan('read_write');
   const mount = plan.args[plan.args.indexOf('-v') + 1];
   assert.ok(mount.endsWith(':/workspace:rw'), `expected a writable mount, got ${mount}`);
 });
 
-test('disposable compute is hardened and reaches nothing else on the host', () => {
+test('disposable compute is hardened and reaches nothing else on the host', (t) => {
+  if (!dockerCliAvailable()) return t.skip('docker CLI not installed on this runner');
   const plan = dockerPlan('read_only');
   const args = plan.args.map(String);
   assert.ok(args.includes('--rm'), 'container must be disposable');
@@ -168,7 +177,8 @@ test('disposable compute is hardened and reaches nothing else on the host', () =
   }
 });
 
-test('compute containers are labelled so revoke can destroy them', () => {
+test('compute containers are labelled so revoke can destroy them', (t) => {
+  if (!dockerCliAvailable()) return t.skip('docker CLI not installed on this runner');
   const plan = dockerPlan('read_only');
   const label = plan.args[plan.args.indexOf('--label') + 1];
   assert.ok(label.startsWith(`${backends.COMPUTE_LABEL}=`), `unlabelled container: ${label}`);
@@ -185,7 +195,8 @@ test('revoking clears the session so later cleanup cannot hit a foreign containe
   assert.equal(revoked.released, false);
 });
 
-test('compute stays confined to the released workspace', () => {
+test('compute stays confined to the released workspace', (t) => {
+  if (!dockerCliAvailable()) return t.skip('docker CLI not installed on this runner');
   for (const escape of ['..', '../..', '/etc']) {
     assert.throws(() => dockerPlan('read_write', 'ls', escape), /outside the released workspace/);
   }
