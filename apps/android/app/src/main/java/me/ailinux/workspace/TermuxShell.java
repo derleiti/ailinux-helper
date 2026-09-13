@@ -137,9 +137,13 @@ final class TermuxShell {
         }
         try {
             Intent callback = new Intent(RESULT_ACTION).setPackage(context.getPackageName());
+            int pendingFlags = PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_UPDATE_CURRENT;
+            // Termux fills the RUN_COMMAND result bundle into this callback. Android 12+
+            // therefore requires a mutable PendingIntent; an immutable callback fires
+            // but arrives without the Termux result extras.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) pendingFlags |= PendingIntent.FLAG_MUTABLE;
             PendingIntent pending = PendingIntent.getBroadcast(
-                    context, (int) (System.nanoTime() & 0x7fffffff), callback,
-                    PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                    context, (int) (System.nanoTime() & 0x7fffffff), callback, pendingFlags);
 
             Intent intent = new Intent(ACTION_RUN_COMMAND);
             intent.setClassName(TERMUX_PACKAGE, RUN_COMMAND_SERVICE);

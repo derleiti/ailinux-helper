@@ -163,3 +163,11 @@ test('desktop package explicitly ships the shell backend module', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   assert.ok(pkg.build.files.includes('shell_backends.js'));
 });
+
+test('android Termux result callback is mutable on Android 12 plus', () => {
+  const termux = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'TermuxShell.java'), 'utf8');
+  assert.match(termux, /Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.S/);
+  assert.match(termux, /pendingFlags \|= PendingIntent\.FLAG_MUTABLE/);
+  assert.doesNotMatch(termux, /PendingIntent\.FLAG_IMMUTABLE/);
+  assert.match(termux, /getBundleExtra\("result"\)/);
+});
