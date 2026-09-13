@@ -1,12 +1,60 @@
 # AILinux Helper
-Cross-platform device helper for AILinux and TriForce.
 
-**Android · Linux · Windows · macOS · Web/PWA fallback**
+[![Build](https://github.com/derleiti/ailinux-helper/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/derleiti/ailinux-helper/actions/workflows/build.yml)
 
-`apps/desktop/` contains the tray shell, `apps/android/` the native foreground executor, `features/` reusable capability manifests, and `assets/brand/` the common artwork.
+**Current release: 2.90.13** · Android · Linux · Windows · macOS · Browser/PWA fallback.
 
-The first module is **Local MCP Workspace** for `https://api.ailinux.me/v1/mcp`. Existing Android application identity and `ailinux-workspace://` links stay compatible during migration; new integrations should use `ailinux-helper://`.
+AILinux Helper is the endpoint companion for TriForce and Loom. It exposes only the local capabilities a user explicitly shares and keeps device execution separate from the remote control plane.
 
-## Branding assets
+## Current release artifacts
 
-AILinux Helper 2.89 introduces one canonical app identity for every platform. The editable base mark lives in `assets/brand/ailinux-helper-base.svg`; generated platform assets live under `assets/desktop/` and Android `mipmap-*` resources. Packaging must reference these assets explicitly rather than falling back to Electron/Android defaults.
+Release: https://github.com/derleiti/ailinux-helper/releases/tag/v2.90.13
+
+- Android production-signed APK
+- Linux AppImage
+- Debian/Ubuntu `.deb`
+- Windows `.exe`
+- macOS `.dmg` and `.zip`
+- browser/PWA workspace executor at https://api.ailinux.me/v1/mcp
+
+The Android signing identity is kept outside Git. GitHub CI builds/tests every platform; trusted-host signing is used when repository signing secrets are intentionally unavailable.
+
+## Capabilities
+
+- local workspace read/write through user-selected directory handles
+- code/file inspection and scoped edits
+- clipboard and screen/device capabilities where explicitly supported
+- typed desktop service control
+- Docker/disposable-compute integration when installed and explicitly enabled
+- reconnectable workspace leases and fresh pairing flows
+- `ailinux-helper://` handoff protocol with legacy `ailinux-workspace://` compatibility
+
+## Source layout
+
+```text
+apps/desktop/   Electron desktop helper
+apps/android/   Native Android foreground executor
+features/       Reusable capability manifests
+assets/         Shared branding/platform assets
+```
+
+## Development
+
+Desktop:
+
+```bash
+cd apps/desktop
+npm ci
+npm run check
+npm run dist:linux   # or dist:win / dist:mac on matching runners
+```
+
+Android uses the Gradle project under `apps/android/` and requires an Android SDK. Production signing material must never be committed.
+
+## Public MCP entry point
+
+https://api.ailinux.me/v1/mcp
+
+## License
+
+AILinux-authored Helper source is covered by the AILinux Proprietary Source License. Gradle wrapper files, Electron/Chromium notices and all other third-party components retain their upstream licenses. See `LICENSE` and `NOTICE.md`.
