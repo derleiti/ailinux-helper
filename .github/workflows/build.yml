@@ -10,28 +10,46 @@ permissions:
   contents: write
 
 jobs:
+  prepare-release:
+    name: Prepare Helper release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Create tagged prerelease shell
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --prerelease \
+              --title "AILinux Helper ${GITHUB_REF_NAME#v}" \
+              --notes "AILinux Helper ${GITHUB_REF_NAME#v}: Android re-pair/folder reset fix plus native AppImage clipboard and context-menu fixes."
+      - name: Branch build only
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: echo "No release upload for branch build."
+
   desktop:
+    needs: prepare-release
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-24.04
             script: dist:linux
-            artifact: ailinux-helper-linux
-            packages: |
-              apps/desktop/dist/*.AppImage
-              apps/desktop/dist/*.deb
+            name: linux
+            release_glob: '*.AppImage *.deb'
           - os: windows-2025
             script: dist:win
-            artifact: ailinux-helper-windows
-            packages: |
-              apps/desktop/dist/*.exe
+            name: windows
+            release_glob: '*.exe'
           - os: macos-15
             script: dist:mac
-            artifact: ailinux-helper-macos
-            packages: |
-              apps/desktop/dist/*.dmg
-              apps/desktop/dist/*.zip
+            name: macos
+            release_glob: '*.dmg *.zip'
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -46,13 +64,23 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run ${{ matrix.script }} -- --publish never
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.packages }}
-          if-no-files-found: error
+      - name: Upload desktop packages directly to tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          shopt -s nullglob
+          files=( ${{ matrix.release_glob }} )
+          ((${#files[@]} > 0)) || { echo "No ${{ matrix.name }} packages produced" >&2; exit 1; }
+          checksum="SHA256SUMS-${{ matrix.name }}.txt"
+          if command -v sha256sum >/dev/null; then sha256sum "${files[@]}" | sort -k2 > "$checksum"; else shasum -a 256 "${files[@]}" | sort -k2 > "$checksum"; fi
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" "$checksum" --repo "$GITHUB_REPOSITORY" --clobber
 
   android:
+    needs: prepare-release
     runs-on: ubuntu-24.04
     env:
       AILINUX_ANDROID_KEYSTORE_B64: ${{ secrets.AILINUX_ANDROID_KEYSTORE_B64 }}
@@ -70,65 +98,69 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ailinux-helper-android-debug
-          path: apps/android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-      - name: Configure Android release signing
-        if: ${{ env.AILINUX_ANDROID_KEYSTORE_B64 != '' && env.AILINUX_ANDROID_STORE_PASSWORD != '' && env.AILINUX_ANDROID_KEY_PASSWORD != '' }}
+      - name: Compile and test Android helper
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - name: Require production signing for tagged releases
+        if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
-          printf '%s' "$AILINUX_ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/ailinux-release.jks"
+          set -euo pipefail
+          test -n "$AILINUX_ANDROID_KEYSTORE_B64"
+          test -n "$AILINUX_ANDROID_STORE_PASSWORD"
+          test -n "$AILINUX_ANDROID_KEY_PASSWORD"
+      - name: Configure Android release signing
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: printf '%s' "$AILINUX_ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/ailinux-release.jks"
       - name: Build signed Android release APK
-        if: ${{ env.AILINUX_ANDROID_KEYSTORE_B64 != '' && env.AILINUX_ANDROID_STORE_PASSWORD != '' && env.AILINUX_ANDROID_KEY_PASSWORD != '' }}
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           AILINUX_ANDROID_KEYSTORE: ${{ runner.temp }}/ailinux-release.jks
         run: ./gradlew --no-daemon :app:assembleRelease
-      - name: Normalize signed Android release APK name
-        if: ${{ env.AILINUX_ANDROID_KEYSTORE_B64 != '' && env.AILINUX_ANDROID_STORE_PASSWORD != '' && env.AILINUX_ANDROID_KEY_PASSWORD != '' }}
+      - name: Verify and upload signed Android APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AILINUX_ANDROID_KEYSTORE: ${{ runner.temp }}/ailinux-release.jks
         shell: bash
-        run: cp app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/AILinux-Helper-${GITHUB_REF_NAME#v}-android.apk"
-      - uses: actions/upload-artifact@v4
-        if: ${{ env.AILINUX_ANDROID_KEYSTORE_B64 != '' && env.AILINUX_ANDROID_STORE_PASSWORD != '' && env.AILINUX_ANDROID_KEY_PASSWORD != '' }}
-        with:
-          name: ailinux-helper-android-release
-          path: apps/android/app/build/outputs/apk/release/AILinux-Helper-*-android.apk
-          if-no-files-found: error
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/release/app-release.apk
+          test -s "$apk"
+          expected_alias="${AILINUX_ANDROID_KEY_ALIAS:-ailinux-workspace}"
+          keytool -list -v -keystore "$AILINUX_ANDROID_KEYSTORE" -alias "$expected_alias" -storepass "$AILINUX_ANDROID_STORE_PASSWORD" | grep -E 'Alias name:|SHA256:'
+          out="AILinux-Helper-${GITHUB_REF_NAME#v}-android.apk"
+          cp "$apk" "$out"
+          sha256sum "$out" > SHA256SUMS-android.txt
+          gh release upload "$GITHUB_REF_NAME" "$out" SHA256SUMS-android.txt --repo "$GITHUB_REPOSITORY" --clobber
 
-  release:
+  release-check:
+    name: Verify Helper release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [desktop, android]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: ailinux-helper-linux
-          path: release-assets
-      - uses: actions/download-artifact@v4
-        with:
-          name: ailinux-helper-windows
-          path: release-assets
-      - uses: actions/download-artifact@v4
-        with:
-          name: ailinux-helper-macos
-          path: release-assets
-      - uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: ailinux-helper-android-release
-          path: release-assets
-      - name: Generate SHA256SUMS
-        run: |
-          cd release-assets
-          sha256sum * > SHA256SUMS
-      - name: Publish GitHub release
+      - name: Verify required assets
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          gh release create "${GITHUB_REF_NAME}" release-assets/* \
-            --repo "${GITHUB_REPOSITORY}" \
-            --verify-tag \
-            --title "AILinux Helper ${GITHUB_REF_NAME#v}" \
-            --notes "Cross-platform AILinux Helper ${GITHUB_REF_NAME#v}. Android production APK is signed and attached after certificate verification."
+          set -euo pipefail
+          assets=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          printf '%s\n' "$assets"
+          for pattern in \
+            '^AILinux-Helper-2\.90\.9-linux-.*\.AppImage$' \
+            '^AILinux-Helper-2\.90\.9-linux-.*\.deb$' \
+            '^AILinux-Helper-2\.90\.9-win-.*\.exe$' \
+            '^AILinux-Helper-2\.90\.9-mac-.*\.dmg$' \
+            '^AILinux-Helper-2\.90\.9-android\.apk$' \
+            '^SHA256SUMS-linux\.txt$' \
+            '^SHA256SUMS-windows\.txt$' \
+            '^SHA256SUMS-macos\.txt$' \
+            '^SHA256SUMS-android\.txt$'; do
+            grep -Eq "$pattern" <<<"$assets" || { echo "missing release asset matching: $pattern" >&2; exit 1; }
+          done
+      - name: Mark release ready
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest

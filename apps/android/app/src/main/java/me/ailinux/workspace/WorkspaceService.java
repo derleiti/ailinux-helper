@@ -8,7 +8,7 @@ import android.os.*;
 import androidx.core.app.NotificationCompat;
 
 public class WorkspaceService extends Service implements ProtocolClient.Listener {
-    public static final String ACTION_START="me.ailinux.workspace.START",ACTION_RECONNECT="me.ailinux.workspace.RECONNECT",ACTION_STOP="me.ailinux.workspace.STOP",EXTRA_HANDOFF="handoff_code";
+    public static final String ACTION_START="me.ailinux.workspace.START",ACTION_RECONNECT="me.ailinux.workspace.RECONNECT",ACTION_NEW_PAIR="me.ailinux.workspace.NEW_PAIR",ACTION_STOP="me.ailinux.workspace.STOP",EXTRA_HANDOFF="handoff_code";
     private static final String CHANNEL="workspace_executor";
     private ProtocolClient client;
     private PowerManager.WakeLock wakeLock;
@@ -37,10 +37,11 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
             return START_NOT_STICKY;
         }
         acquireWakeLock();
+        startForeground(8606,notification("Starting workspace executor…"));
         if(intent!=null&&ACTION_RECONNECT.equals(intent.getAction())){client.stop(false);client.start();return START_STICKY;}
+        if(intent!=null&&ACTION_NEW_PAIR.equals(intent.getAction())){client.stop(true);client.start();return START_STICKY;}
         String handoff=intent==null?null:intent.getStringExtra(EXTRA_HANDOFF);
         if(handoff!=null&&!handoff.isEmpty())client.setHandoffCode(handoff);
-        startForeground(8606,notification("Starting workspace executor…"));
         client.start();
         return START_STICKY;
     }

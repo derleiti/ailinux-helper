@@ -73,6 +73,12 @@ function registerHelperIpc() {
       computer_type: false,
     };
   });
+  ipcMain.handle('ailinux-helper:ui-clipboard-write', (event, text) => {
+    assertTrustedIpc(event);
+    const value = String(text ?? '').slice(0, 1024 * 1024);
+    clipboard.writeText(value);
+    return { ok: true, bytes: Buffer.byteLength(value, 'utf8') };
+  });
   ipcMain.handle('ailinux-helper:clipboard-read', (event) => {
     assertTrustedIpc(event);
     if (!deviceShare.clipboardRead) throw new Error('clipboard read is not shared');
@@ -236,6 +242,28 @@ function createTray() {
   statusTimer = setInterval(pollConnectionState, 4000);
 }
 
+function installNativeContextMenu(webContents) {
+  webContents.on('context-menu', (_event, params) => {
+    const template = [];
+    const flags = params.editFlags || {};
+    if (params.isEditable) {
+      template.push(
+        { role: 'undo', enabled: flags.canUndo !== false },
+        { role: 'redo', enabled: flags.canRedo !== false },
+        { type: 'separator' },
+        { role: 'cut', enabled: flags.canCut !== false },
+        { role: 'copy', enabled: Boolean(params.selectionText) || flags.canCopy !== false },
+        { role: 'paste', enabled: flags.canPaste !== false },
+        { type: 'separator' },
+        { role: 'selectAll', enabled: flags.canSelectAll !== false },
+      );
+    } else if (params.selectionText) {
+      template.push({ role: 'copy' });
+    }
+    if (template.length) Menu.buildFromTemplate(template).popup({ window });
+  });
+}
+
 function createWindow() {
   const ses = session.fromPartition(SESSION_PARTITION);
   configureSession(ses);
@@ -262,6 +290,7 @@ function createWindow() {
     },
   });
 
+  installNativeContextMenu(window.webContents);
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, target) => {
     if (!isTrustedDocument(target)) event.preventDefault();
@@ -276,6 +305,27 @@ function createWindow() {
     window.hide();
   });
 
+  window.webContents.on('did-finish-load', () => {
+    window.webContents.executeJavaScript(`(() => {
+      const copy = document.getElementById('copy');
+      const input = document.getElementById('generated');
+      const status = document.getElementById('status');
+      if (!copy || !input || copy.dataset.ailinuxNativeCopy === '1' || !window.ailinuxHelper?.uiClipboardWrite) return;
+      copy.dataset.ailinuxNativeCopy = '1';
+      copy.addEventListener('click', async (event) => {
+        if (!input.value) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        try {
+          await window.ailinuxHelper.uiClipboardWrite(input.value);
+          if (status) status.textContent = 'Pair code copied.';
+        } catch (error) {
+          input.focus(); input.select();
+          if (status) status.textContent = 'Copy failed; pair code selected.';
+        }
+      }, true);
+    })()`, true).catch(() => {});
+  });
   window.once('ready-to-show', () => { if (!startHidden) window.show(); });
   window.loadURL(safeTarget(pendingDeepLink || START_URL));
   pendingDeepLink = null;

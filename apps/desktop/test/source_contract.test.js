@@ -90,3 +90,37 @@ test('android helper discards expired pair credentials without deleting durable 
   assert.match(stateStore, /void clearPairCode\(\).*remove\("pair_code"\)/s);
   assert.doesNotMatch(stateStore.match(/void clearPairCode\(\).*?\}/s)?.[0] || '', /resume_token/);
 });
+
+
+test('desktop helper provides native context-menu copy paste and select-all actions', () => {
+  assert.match(source, /webContents\.on\('context-menu'/);
+  assert.match(source, /role:\s*'copy'/);
+  assert.match(source, /role:\s*'paste'/);
+  assert.match(source, /role:\s*'selectAll'/);
+});
+
+test('desktop pair-code copy uses trusted local UI clipboard bridge without enabling MCP clipboard sharing', () => {
+  const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+  assert.match(source, /ailinux-helper:ui-clipboard-write/);
+  assert.match(preload, /uiClipboardWrite/);
+  assert.match(source, /ailinuxNativeCopy/);
+  const handler = source.match(/ipcMain\.handle\('ailinux-helper:ui-clipboard-write'[\s\S]*?\n  \}\);/)?.[0] || '';
+  assert.match(handler, /assertTrustedIpc/);
+  assert.doesNotMatch(handler, /deviceShare\.clipboardWrite/);
+});
+
+test('android helper can explicitly start a fresh pairing and folder changes cannot resurrect a stale code', () => {
+  const activity = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'MainActivity.java'), 'utf8');
+  const service = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'WorkspaceService.java'), 'utf8');
+  const stateStore = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'StateStore.java'), 'utf8');
+  assert.match(activity, /Generate new pair code/);
+  assert.match(activity, /beginFreshPairing/);
+  assert.match(activity, /showPairCode\("",true\)/);
+  assert.match(activity, /boolean changed=state\.setTree\(uri\)/);
+  assert.match(service, /ACTION_NEW_PAIR/);
+  assert.match(service, /startForeground\(8606.*ACTION_NEW_PAIR\.equals\(intent\.getAction\(\)\).*client\.stop\(true\);client\.start\(\)/s);
+  assert.match(stateStore, /boolean setTree\(Uri uri\)/);
+  assert.match(stateStore, /if \(changed\) editor\.remove\("pair_code"\)\.remove\("resume_token"\)/);
+  const protocol = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
+  assert.match(protocol, /if\(revoke\)\{handoffCode="";state\.clearCredentials\(\);\}/);
+});

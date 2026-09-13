@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 final class ProtocolClient extends WebSocketListener {
     interface Listener { void onState(String state); void onResumeToken(String token); void onPairCode(String code); }
-    static final String VERSION="2.90.8-android";
+    static final String VERSION="2.90.9-android";
     static final String BASE="https://api.ailinux.me";
     private static final String TAG="AILinuxWorkspace";
     private final Context context; private final StateStore state; private final Listener listener;
@@ -27,7 +27,7 @@ final class ProtocolClient extends WebSocketListener {
     void setHandoffCode(String code){handoffCode=code==null?"":code.trim().toUpperCase();}
     void start(){stopped.set(false);cancelReconnect();WebSocket current=ws;if(current!=null)return;connect();}
     void onNetworkAvailable(){if(stopped.get()||ws!=null||connecting.get())return;reconnectAttempt=0;cancelReconnect();listener.onState("Network available · reconnecting");connect();}
-    void stop(boolean revoke){stopped.set(true);cancelReconnect();connecting.set(false);WebSocket s=ws;if(s!=null){if(revoke){try{s.send(new JSONObject().put("jsonrpc","2.0").put("method","workspace/revoke").put("params",new JSONObject()).toString());}catch(Exception ignored){}}s.close(1000,"user disconnect");}ws=null;if(revoke)state.clearCredentials();listener.onState("Disconnected");}
+    void stop(boolean revoke){stopped.set(true);cancelReconnect();connecting.set(false);WebSocket s=ws;if(s!=null){if(revoke){try{s.send(new JSONObject().put("jsonrpc","2.0").put("method","workspace/revoke").put("params",new JSONObject()).toString());}catch(Exception ignored){}}s.close(1000,"user disconnect");}ws=null;if(revoke){handoffCode="";state.clearCredentials();}listener.onState("Disconnected");}
 
     private JSONArray capabilities(){JSONArray out=new JSONArray();for(int i=0;i<readCaps.length();i++)out.put(readCaps.optString(i));if("write".equals(state.mode())){out.put("file_edit").put("directory_create").put("workspace_clear").put("code_edit");}return out;}
     private void connect(){

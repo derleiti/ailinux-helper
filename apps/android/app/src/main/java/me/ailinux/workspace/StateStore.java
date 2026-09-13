@@ -8,12 +8,14 @@ final class StateStore {
     private static final String PREFS = "workspace_state";
     private final SharedPreferences prefs;
     StateStore(Context context) { prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
-    void setTree(Uri uri) {
+    boolean setTree(Uri uri) {
         String next = uri == null ? "" : uri.toString();
         String previous = prefs.getString("tree_uri", "");
+        boolean changed = !next.equals(previous);
         SharedPreferences.Editor editor = prefs.edit().putString("tree_uri", next);
-        if (!next.equals(previous)) editor.remove("pair_code").remove("resume_token");
+        if (changed) editor.remove("pair_code").remove("resume_token");
         editor.apply();
+        return changed;
     }
     Uri tree() { String v = prefs.getString("tree_uri", ""); return v == null || v.isEmpty() ? null : Uri.parse(v); }
     void setMode(String mode) { prefs.edit().putString("mode", "write".equals(mode) ? "write" : "read_only").apply(); }
