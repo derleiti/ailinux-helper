@@ -10,7 +10,10 @@
     "read-write",
     "foreground-executor",
     "tray-executor",
-    "deep-link-handoff"
+    "deep-link-handoff",
+    "mcp-device-sharing",
+    "clipboard-opt-in",
+    "screen-observe-opt-in"
   ],
   "protocols": [
     "ailinux-helper",
@@ -23,7 +26,7 @@
     "macos",
     "web"
   ],
-  "version": "2.90.1",
+  "version": "2.90.2",
   "lifecycle": {
     "desktop": "tray-resident transport",
     "android": "foreground-service transport",

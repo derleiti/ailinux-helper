@@ -18,7 +18,9 @@
 - Local terminal executor with explicit opt-in and policy profile.
 - Notification bridge between TriForce and the device.
 - Local model discovery/runtime bridge.
-- Desktop application integration (GIMP, clipboard, share sheet).
+- Desktop MCP device sharing: clipboard read/write and screen observation are explicit, independent opt-ins in the native Helper tray.
+- Mouse/keyboard control remains disabled until a native accessibility/UI-automation backend can enforce per-capability consent.
+- Desktop application integration (GIMP, share sheet and future app adapters).
 - Device health/status telemetry with explicit opt-in.
 - Secure file drop / local share handoff.
 - Camera/scanner/OCR bridge on mobile.

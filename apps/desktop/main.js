@@ -1,7 +1,8 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, Tray, nativeImage, Notification, powerSaveBlocker, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, Notification, powerSaveBlocker, session, shell, clipboard, desktopCapturer, ipcMain, screen } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 const APP_NAME = 'AILinux Helper';
 const START_URL = 'https://api.ailinux.me/v1/mcp';
@@ -19,6 +20,90 @@ let pendingDeepLink = null;
 let connectionState = 'Starting';
 let lastNotifiedState = '';
 let statusTimer = null;
+
+let deviceShare = { clipboardRead: false, clipboardWrite: false, screenObserve: false };
+
+function deviceSharePath() {
+  return path.join(app.getPath('userData'), 'mcp-device-share.json');
+}
+
+function loadDeviceShare() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(deviceSharePath(), 'utf8'));
+    deviceShare = {
+      clipboardRead: raw.clipboardRead === true,
+      clipboardWrite: raw.clipboardWrite === true,
+      screenObserve: raw.screenObserve === true,
+    };
+  } catch {}
+}
+
+function saveDeviceShare() {
+  try {
+    fs.mkdirSync(path.dirname(deviceSharePath()), { recursive: true });
+    const tmp = `${deviceSharePath()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(deviceShare, null, 2), { mode: 0o600 });
+    fs.renameSync(tmp, deviceSharePath());
+  } catch {}
+}
+
+function trustedIpc(event) {
+  const senderUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
+  return isTrustedDocument(senderUrl);
+}
+
+function assertTrustedIpc(event) {
+  if (!trustedIpc(event)) throw new Error('untrusted helper renderer');
+}
+
+function registerHelperIpc() {
+  ipcMain.handle('ailinux-helper:get-capabilities', (event) => {
+    assertTrustedIpc(event);
+    return {
+      platform: PLATFORM_LABEL,
+      clipboard_read: deviceShare.clipboardRead,
+      clipboard_write: deviceShare.clipboardWrite,
+      computer_screenshot: deviceShare.screenObserve,
+      computer_observe: deviceShare.screenObserve,
+      computer_click: false,
+      computer_type: false,
+    };
+  });
+  ipcMain.handle('ailinux-helper:clipboard-read', (event) => {
+    assertTrustedIpc(event);
+    if (!deviceShare.clipboardRead) throw new Error('clipboard read is not shared');
+    return { text: clipboard.readText() };
+  });
+  ipcMain.handle('ailinux-helper:clipboard-write', (event, text) => {
+    assertTrustedIpc(event);
+    if (!deviceShare.clipboardWrite) throw new Error('clipboard write is not shared');
+    const value = String(text ?? '').slice(0, 1024 * 1024);
+    clipboard.writeText(value);
+    return { ok: true, bytes: Buffer.byteLength(value, 'utf8') };
+  });
+  ipcMain.handle('ailinux-helper:screenshot', async (event) => {
+    assertTrustedIpc(event);
+    if (!deviceShare.screenObserve) throw new Error('screen observation is not shared');
+    const primary = screen.getPrimaryDisplay();
+    const size = primary?.size || { width: 1920, height: 1080 };
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: Math.max(1, size.width), height: Math.max(1, size.height) },
+      fetchWindowIcons: false,
+    });
+    if (!sources.length) throw new Error('no screen capture source available');
+    const preferred = sources.find((source) => String(source.display_id || '') === String(primary?.id || '')) || sources[0];
+    const image = preferred.thumbnail;
+    const actual = image.getSize();
+    return {
+      mime: 'image/png',
+      data_url: image.toDataURL(),
+      width: actual.width,
+      height: actual.height,
+      source: 'primary-screen',
+    };
+  });
+}
 
 function safeTarget(value) {
   try {
@@ -103,6 +188,16 @@ function rebuildTrayMenu() {
     { label: `Status: ${connectionState}`, enabled: false },
     { label: `Platform: ${PLATFORM_LABEL}`, enabled: false },
     { type: 'separator' },
+    {
+      label: 'MCP device sharing',
+      submenu: [
+        { label: 'Share clipboard read', type: 'checkbox', checked: deviceShare.clipboardRead, click: (item) => { deviceShare.clipboardRead = item.checked; saveDeviceShare(); rebuildTrayMenu(); } },
+        { label: 'Share clipboard write', type: 'checkbox', checked: deviceShare.clipboardWrite, click: (item) => { deviceShare.clipboardWrite = item.checked; saveDeviceShare(); rebuildTrayMenu(); } },
+        { label: 'Share screen observation', type: 'checkbox', checked: deviceShare.screenObserve, click: (item) => { deviceShare.screenObserve = item.checked; saveDeviceShare(); rebuildTrayMenu(); } },
+        { label: 'Mouse/keyboard control: unavailable', enabled: false },
+      ],
+    },
+    { type: 'separator' },
     { label: 'Reconnect workspace', click: () => window?.webContents.reloadIgnoringCache() },
     { label: 'Open MCP URL in default browser', click: () => shell.openExternal(START_URL) },
     { type: 'separator' },
@@ -152,6 +247,7 @@ function createWindow() {
     autoHideMenuBar: true,
     webPreferences: {
       partition: SESSION_PARTITION,
+      preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -203,6 +299,8 @@ if (!gotLock) {
     app.setName(APP_NAME);
     for (const protocol of PROTOCOLS) app.setAsDefaultProtocolClient(protocol);
     pendingDeepLink = targetFromArgv(process.argv) || pendingDeepLink;
+    loadDeviceShare();
+    registerHelperIpc();
     powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
     createWindow();
     createTray();

@@ -64,3 +64,19 @@ test('desktop helper ships and loads the branded tray icon', () => {
   assert.match(source, /nativeImage\.createFromPath/);
   assert.match(source, /assets\/desktop\/icon\.png/);
 });
+
+
+test('desktop helper exposes device MCP capabilities through an isolated preload bridge', () => {
+  assert.match(source, /preload:\s*path\.join\(__dirname, 'preload\.js'\)/);
+  assert.match(source, /ailinux-helper:get-capabilities/);
+  assert.match(source, /Share clipboard read/);
+  assert.match(source, /Share clipboard write/);
+  assert.match(source, /Share screen observation/);
+  assert.match(source, /computer_click:\s*false/);
+  assert.match(source, /computer_type:\s*false/);
+});
+
+test('native helper IPC rejects untrusted renderer origins', () => {
+  assert.match(source, /assertTrustedIpc/);
+  assert.match(source, /isTrustedDocument\(senderUrl\)/);
+});
