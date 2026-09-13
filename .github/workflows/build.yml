@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
     paths: ['apps/**', 'features/**', 'assets/**', '.github/workflows/build.yml']
+
 jobs:
   desktop:
     strategy:
@@ -12,10 +13,21 @@ jobs:
         include:
           - os: ubuntu-24.04
             script: dist:linux
+            artifact: ailinux-helper-linux
+            packages: |
+              apps/desktop/dist/*.AppImage
+              apps/desktop/dist/*.deb
           - os: windows-2025
             script: dist:win
+            artifact: ailinux-helper-windows
+            packages: |
+              apps/desktop/dist/*.exe
           - os: macos-15
             script: dist:mac
+            artifact: ailinux-helper-macos
+            packages: |
+              apps/desktop/dist/*.dmg
+              apps/desktop/dist/*.zip
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -23,14 +35,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: {node-version: '22', cache: npm, cache-dependency-path: apps/desktop/package-lock.json}
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
       - run: npm ci
       - run: npm run check
       - run: npm run ${{ matrix.script }} -- --publish never
       - uses: actions/upload-artifact@v4
         with:
-          name: ailinux-helper-${{ matrix.os }}
-          path: apps/desktop/dist/*
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.packages }}
+          if-no-files-found: error
+
   android:
     runs-on: ubuntu-24.04
     defaults:
@@ -39,7 +56,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
-        with: {distribution: temurin, java-version: '17'}
+        with:
+          distribution: temurin
+          java-version: '17'
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
@@ -47,3 +66,4 @@ jobs:
         with:
           name: ailinux-helper-android-debug
           path: apps/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
