@@ -1,0 +1,81 @@
+{
+  "name": "@ailinux/helper-desktop",
+  "version": "2.87.0",
+  "private": true,
+  "description": "AILinux Helper cross-platform device companion for Linux, Windows and macOS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check main.js && node --test test/*.test.js",
+    "dist": "electron-builder",
+    "dist:linux": "electron-builder --linux AppImage deb",
+    "dist:win": "electron-builder --win nsis portable",
+    "dist:mac": "electron-builder --mac dmg zip"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.0.12"
+  },
+  "productName": "AILinux Helper",
+  "build": {
+    "appId": "me.ailinux.workspace.desktop",
+    "productName": "AILinux Helper",
+    "artifactName": "AILinux-Helper-${version}-${os}-${arch}.${ext}",
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "protocols": [
+      {
+        "name": "AILinux Helper",
+        "schemes": [
+          "ailinux-helper",
+          "ailinux-workspace"
+        ]
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development",
+      "synopsis": "AILinux cross-platform local device helper",
+      "maintainer": "AILinux <admin@ailinux.me>"
+    },
+    "deb": {
+      "priority": "optional"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    }
+  },
+  "author": {
+    "name": "AILinux",
+    "email": "admin@ailinux.me"
+  },
+  "homepage": "https://ailinux.me",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ailinux-me/triforce.git"
+  }
+}

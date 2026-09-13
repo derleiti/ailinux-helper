@@ -1,0 +1,17 @@
+**/dist/
+**/build/
+**/.gradle/
+**/node_modules/
+releases/*
+!releases/.gitkeep
+.idea/
+.vscode/
+*.iml
+.DS_Store
+*.log
+*.jks
+*.keystore
+*.p12
+.env
+.env.*
+!*.env.example
