@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('ailinuxHelper', Object.freeze({
   dockerService: (action) => ipcRenderer.invoke('ailinux-helper:docker-service', String(action || '')),
   dockerInstall: () => ipcRenderer.invoke('ailinux-helper:docker-install'),
   dockerTest: () => ipcRenderer.invoke('ailinux-helper:docker-test'),
+  serviceList: () => ipcRenderer.invoke('ailinux-helper:service-list'),
+  serviceAction: (id, action) => ipcRenderer.invoke('ailinux-helper:service-action', String(id || ''), String(action || '')),
   runCompute: (payload) => ipcRenderer.invoke('ailinux:shell-run', payload || {}),
   onShareProfileChanged: (callback) => {
     if (typeof callback !== 'function') return;

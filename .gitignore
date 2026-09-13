@@ -15,3 +15,6 @@ releases/*
 .env
 .env.*
 !*.env.example
+
+# Local agent recovery snapshots
+.workspacebackup/

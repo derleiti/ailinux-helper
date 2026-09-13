@@ -26,6 +26,7 @@
       "preload.js",
       "shell_backends.js",
       "docker_runtime.js",
+      "service_runtime.js",
       "package.json",
       "design-tokens.json"
     ],

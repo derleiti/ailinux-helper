@@ -196,3 +196,17 @@ test('every device share flag defaults to off', () => {
   assert.ok(flags.length >= 6, 'expected at least six share flags');
   for (const flag of flags) assert.match(flag, /:\s*false$/, `share flag must default off: ${flag}`);
 });
+
+
+test('typed local service control exposes only allowlisted service operations', () => {
+  const runtime = fs.readFileSync(path.join(__dirname, '..', 'service_runtime.js'), 'utf8');
+  const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+  for (const unit of ['ailinux-workspace-browser.service', 'triforce.service', 'ollama.service']) assert.match(runtime, new RegExp(unit.replace('.', '\\.')));
+  assert.match(runtime, /ACTIONS = Object\.freeze\(\['start', 'stop', 'restart'\]\)/);
+  assert.match(main, /ailinux-helper:service-list/);
+  assert.match(main, /ailinux-helper:service-action/);
+  assert.match(main, /unsupported typed service operation/);
+  assert.match(preload, /serviceList:/);
+  assert.match(preload, /serviceAction:/);
+});

@@ -6,6 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const shellBackends = require('./shell_backends');
 const dockerRuntime = require('./docker_runtime');
+const serviceRuntime = require('./service_runtime');
 
 const APP_NAME = 'AILinux Helper';
 const START_URL = 'https://api.ailinux.me/v1/mcp';
@@ -229,6 +230,19 @@ function registerHelperIpc() {
   ipcMain.handle('ailinux-helper:docker-test', async (event) => {
     assertTrustedIpc(event);
     return dockerRuntime.testContainer();
+  });
+  ipcMain.handle('ailinux-helper:service-list', async (event) => {
+    assertTrustedIpc(event);
+    return serviceRuntime.list();
+  });
+  ipcMain.handle('ailinux-helper:service-action', async (event, id, action) => {
+    assertTrustedIpc(event);
+    const service = serviceRuntime.descriptor(String(id || ''));
+    const name = String(action || '');
+    if (!service || !serviceRuntime.ACTIONS.includes(name)) return { ok: false, error: 'unsupported typed service operation' };
+    const allowed = await confirmPrivilegedAction(name + ' ' + service.label, 'Only the allowlisted service ' + service.unit + ' will be changed. No free-form shell command is executed.');
+    if (!allowed) return { ok: false, id: service.id, action: name, error: 'cancelled by user' };
+    return serviceRuntime.action(service.id, name);
   });
   ipcMain.handle('ailinux-helper:ui-clipboard-write', (event, text) => {
     assertTrustedIpc(event);
