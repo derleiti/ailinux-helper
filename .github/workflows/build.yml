@@ -71,6 +71,31 @@ jobs:
           name: ailinux-helper-android-debug
           path: apps/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+      - name: Configure Android release signing
+        if: ${{ secrets.AILINUX_ANDROID_KEYSTORE_B64 != '' && secrets.AILINUX_ANDROID_STORE_PASSWORD != '' && secrets.AILINUX_ANDROID_KEY_PASSWORD != '' }}
+        shell: bash
+        env:
+          AILINUX_ANDROID_KEYSTORE_B64: ${{ secrets.AILINUX_ANDROID_KEYSTORE_B64 }}
+        run: |
+          printf '%s' "$AILINUX_ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/ailinux-release.jks"
+      - name: Build signed Android release APK
+        if: ${{ secrets.AILINUX_ANDROID_KEYSTORE_B64 != '' && secrets.AILINUX_ANDROID_STORE_PASSWORD != '' && secrets.AILINUX_ANDROID_KEY_PASSWORD != '' }}
+        env:
+          AILINUX_ANDROID_KEYSTORE: ${{ runner.temp }}/ailinux-release.jks
+          AILINUX_ANDROID_STORE_PASSWORD: ${{ secrets.AILINUX_ANDROID_STORE_PASSWORD }}
+          AILINUX_ANDROID_KEY_ALIAS: ${{ secrets.AILINUX_ANDROID_KEY_ALIAS }}
+          AILINUX_ANDROID_KEY_PASSWORD: ${{ secrets.AILINUX_ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon :app:assembleRelease
+      - name: Normalize signed Android release APK name
+        if: ${{ secrets.AILINUX_ANDROID_KEYSTORE_B64 != '' && secrets.AILINUX_ANDROID_STORE_PASSWORD != '' && secrets.AILINUX_ANDROID_KEY_PASSWORD != '' }}
+        shell: bash
+        run: cp app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/AILinux-Helper-${GITHUB_REF_NAME#v}-android.apk"
+      - uses: actions/upload-artifact@v4
+        if: ${{ secrets.AILINUX_ANDROID_KEYSTORE_B64 != '' && secrets.AILINUX_ANDROID_STORE_PASSWORD != '' && secrets.AILINUX_ANDROID_KEY_PASSWORD != '' }}
+        with:
+          name: ailinux-helper-android-release
+          path: apps/android/app/build/outputs/apk/release/AILinux-Helper-*-android.apk
+          if-no-files-found: error
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -89,6 +114,15 @@ jobs:
         with:
           name: ailinux-helper-macos
           path: release-assets
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: ailinux-helper-android-release
+          path: release-assets
+      - name: Generate SHA256SUMS
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
