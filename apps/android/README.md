@@ -14,8 +14,8 @@ Native Android companion for `https://api.ailinux.me/v1/mcp`.
 Requires JDK 17 and Android SDK 35:
 
 ```bash
-cd android_workspace
-gradle :app:testDebugUnitTest :app:assembleDebug
+cd apps/android
+./gradlew :app:testDebugUnitTest :app:assembleDebug
 ```
 
 Release automation publishes `AILinux-Workspace-latest.apk` into `releases/android/` for the backend download route.
