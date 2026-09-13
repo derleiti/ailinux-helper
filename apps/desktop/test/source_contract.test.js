@@ -124,3 +124,42 @@ test('android helper can explicitly start a fresh pairing and folder changes can
   const protocol = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
   assert.match(protocol, /if\(revoke\)\{handoffCode="";state\.clearCredentials\(\);\}/);
 });
+
+test('desktop helper exposes a separately released native shell bridge', () => {
+  const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+  assert.match(source, /require\('\.\/shell_backends'\)/);
+  assert.match(source, /ipcMain\.handle\('ailinux:shell-status'/);
+  assert.match(source, /ipcMain\.handle\('ailinux:shell-backend'/);
+  assert.match(source, /ipcMain\.handle\('ailinux:shell-release'/);
+  assert.match(source, /ipcMain\.handle\('ailinux:shell-revoke'/);
+  assert.match(source, /ipcMain\.handle\('ailinux:shell-run'/);
+  assert.match(source, /dialog\.showMessageBox/);
+  assert.match(source, /dialog\.showOpenDialog/);
+  assert.match(preload, /exposeInMainWorld\('ailinuxNative'/);
+  assert.match(preload, /setShellBackend/);
+  assert.match(preload, /releaseShell/);
+  assert.match(preload, /revokeShell/);
+  assert.match(preload, /runShell/);
+});
+
+test('android helper gates Termux shell capability behind explicit release', () => {
+  const root = path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main');
+  const protocol = fs.readFileSync(path.join(root, 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
+  const stateStore = fs.readFileSync(path.join(root, 'java', 'me', 'ailinux', 'workspace', 'StateStore.java'), 'utf8');
+  const activity = fs.readFileSync(path.join(root, 'java', 'me', 'ailinux', 'workspace', 'MainActivity.java'), 'utf8');
+  const manifest = fs.readFileSync(path.join(root, 'AndroidManifest.xml'), 'utf8');
+  const termux = fs.readFileSync(path.join(root, 'java', 'me', 'ailinux', 'workspace', 'TermuxShell.java'), 'utf8');
+  assert.match(protocol, /if\(shell\.released\(\)\)out\.put\("shell"\)/);
+  assert.match(protocol, /case"shell":return shell\.run/);
+  assert.match(stateStore, /setShellReleased/);
+  assert.match(activity, /Release terminal to the AI \(Termux\)/);
+  assert.match(manifest, /com\.termux\.permission\.RUN_COMMAND/);
+  assert.match(manifest, /<package android:name="com\.termux"/);
+  assert.match(termux, /terminal not released by the user/);
+  assert.match(termux, /RUN_COMMAND_WORKDIR/);
+});
+
+test('desktop package explicitly ships the shell backend module', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  assert.ok(pkg.build.files.includes('shell_backends.js'));
+});

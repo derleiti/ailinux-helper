@@ -30,5 +30,7 @@ final class StateStore {
     void clearPairCode() { prefs.edit().remove("pair_code").apply(); }
     void setResumeToken(String token) { prefs.edit().putString("resume_token", token == null ? "" : token).apply(); }
     String resumeToken() { return prefs.getString("resume_token", ""); }
+    void setShellReleased(boolean released) { prefs.edit().putBoolean("shell_released", released).apply(); }
+    boolean shellReleased() { return prefs.getBoolean("shell_released", false); }
     void clearCredentials() { prefs.edit().remove("pair_code").remove("resume_token").apply(); }
 }

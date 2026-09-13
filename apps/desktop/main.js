@@ -1,8 +1,9 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, Tray, nativeImage, Notification, powerSaveBlocker, session, shell, clipboard, desktopCapturer, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, Notification, powerSaveBlocker, session, shell, clipboard, desktopCapturer, ipcMain, screen, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const shellBackends = require('./shell_backends');
 
 const APP_NAME = 'AILinux Helper';
 const START_URL = 'https://api.ailinux.me/v1/mcp';
@@ -60,6 +61,39 @@ function assertTrustedIpc(event) {
   if (!trustedIpc(event)) throw new Error('untrusted helper renderer');
 }
 
+function broadcastShellState(state) {
+  try { window?.webContents?.send('ailinux:shell-changed', state); } catch {}
+  rebuildTrayMenu();
+}
+
+async function releaseHostShell() {
+  const state = shellBackends.status();
+  if (!state.available) return state;
+  const confirmed = await dialog.showMessageBox(window, {
+    type: 'warning',
+    buttons: ['Cancel', 'Choose folder and release'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Release terminal to the AI',
+    message: 'Give the AI a terminal on this computer?',
+    detail: `Backend: ${state.label}\n`
+      + `${state.sandboxed ? 'Commands run inside a sandbox.' : 'Commands run with your user account, without a sandbox.'}\n\n`
+      + 'Choose the shell workspace separately. Commands are confined to that folder, while the shared file workspace can remain a different folder.',
+  });
+  if (confirmed.response !== 1) return shellBackends.status();
+  const picked = await dialog.showOpenDialog(window, {
+    title: 'Folder exposed to the released terminal',
+    properties: ['openDirectory'],
+  });
+  if (picked.canceled || !picked.filePaths.length) return shellBackends.status();
+  const granted = shellBackends.grantRelease(picked.filePaths[0]);
+  broadcastShellState(granted);
+  if (Notification.isSupported()) {
+    new Notification({ title: APP_NAME, body: `Terminal released: ${granted.label}\n${granted.workspace}`, silent: true }).show();
+  }
+  return granted;
+}
+
 function registerHelperIpc() {
   ipcMain.handle('ailinux-helper:get-capabilities', (event) => {
     assertTrustedIpc(event);
@@ -113,6 +147,35 @@ function registerHelperIpc() {
       source: 'primary-screen',
     };
   });
+  ipcMain.handle('ailinux:shell-status', (event) => {
+    assertTrustedIpc(event);
+    return shellBackends.status();
+  });
+  ipcMain.handle('ailinux:shell-backend', (event, name) => {
+    assertTrustedIpc(event);
+    try {
+      const state = shellBackends.setBackend(name);
+      broadcastShellState(state);
+      return state;
+    } catch (error) {
+      return { ...shellBackends.status(), error: String(error?.message || error) };
+    }
+  });
+  ipcMain.handle('ailinux:shell-release', async (event) => {
+    assertTrustedIpc(event);
+    return releaseHostShell();
+  });
+  ipcMain.handle('ailinux:shell-revoke', (event) => {
+    assertTrustedIpc(event);
+    const state = shellBackends.revokeRelease();
+    broadcastShellState(state);
+    return state;
+  });
+  ipcMain.handle('ailinux:shell-run', async (event, payload) => {
+    assertTrustedIpc(event);
+    return shellBackends.runShell(payload || {});
+  });
+
 }
 
 function safeTarget(value) {
@@ -197,6 +260,7 @@ function rebuildTrayMenu() {
     { label: 'Open AILinux Helper', click: showWindow },
     { label: `Status: ${connectionState}`, enabled: false },
     { label: `Platform: ${PLATFORM_LABEL}`, enabled: false },
+    { label: `Terminal: ${shellBackends.status().released ? shellBackends.status().label : 'not released'}`, enabled: false },
     { type: 'separator' },
     {
       label: 'MCP device sharing',
