@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=AILinux Helper
+Comment=Persistent local AILinux device helper
+Exec=ailinux-helper %U
+Icon=ailinux-helper
+Terminal=false
+Categories=Development;Utility;
+StartupNotify=true
+MimeType=x-scheme-handler/ailinux-helper;x-scheme-handler/ailinux-workspace;

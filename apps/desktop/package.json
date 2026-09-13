@@ -1,6 +1,6 @@
 {
   "name": "@ailinux/helper-desktop",
-  "version": "2.88.0",
+  "version": "2.89.0",
   "private": true,
   "description": "AILinux Helper cross-platform device companion for Linux, Windows and macOS",
   "main": "main.js",
@@ -26,7 +26,8 @@
       "package.json"
     ],
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "../../assets/desktop"
     },
     "protocols": [
       {
@@ -44,7 +45,8 @@
       ],
       "category": "Development",
       "synopsis": "AILinux cross-platform local device helper",
-      "maintainer": "AILinux <admin@ailinux.me>"
+      "maintainer": "AILinux <admin@ailinux.me>",
+      "icon": "../../assets/desktop/icon.png"
     },
     "deb": {
       "priority": "optional"
@@ -53,7 +55,8 @@
       "target": [
         "nsis",
         "portable"
-      ]
+      ],
+      "icon": "../../assets/desktop/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -66,7 +69,8 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "icon": "../../assets/desktop/icon-macos-1024.png"
     }
   },
   "author": {
