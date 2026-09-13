@@ -13,19 +13,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 final class ProtocolClient extends WebSocketListener {
     interface Listener { void onState(String state); void onResumeToken(String token); void onPairCode(String code); }
-    static final String VERSION="2.90.2-android";
+    static final String VERSION="2.90.6-android";
     static final String BASE="https://api.ailinux.me";
     private static final String TAG="AILinuxWorkspace";
     private final Context context; private final StateStore state; private final Listener listener;
     private final OkHttpClient http=new OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).retryOnConnectionFailure(true).build();
     private final ScheduledExecutorService timer=Executors.newSingleThreadScheduledExecutor(); private final ExecutorService tools=Executors.newSingleThreadExecutor();
-    private volatile WebSocket ws; private volatile String handoffCode=""; private volatile int reconnectAttempt=0; private volatile ScheduledFuture<?> reconnectFuture; private final AtomicBoolean stopped=new AtomicBoolean(false); private final AtomicBoolean connecting=new AtomicBoolean(false);
+    private volatile WebSocket ws; private volatile String handoffCode=""; private volatile int reconnectAttempt=0; private volatile ScheduledFuture<?> reconnectFuture; private final AtomicBoolean stopped=new AtomicBoolean(true); private final AtomicBoolean connecting=new AtomicBoolean(false);
     private SafWorkspace workspace;
     private final JSONArray readCaps=new JSONArray().put("workspace_info").put("file_read").put("file_tree").put("code_read").put("code_tree").put("code_search").put("code_grep").put("file_ops");
 
     ProtocolClient(Context context, Listener listener){this.context=context.getApplicationContext();this.state=new StateStore(context);this.listener=listener;}
     void setHandoffCode(String code){handoffCode=code==null?"":code.trim().toUpperCase();}
     void start(){stopped.set(false);cancelReconnect();WebSocket current=ws;if(current!=null)return;connect();}
+    void onNetworkAvailable(){if(stopped.get()||ws!=null||connecting.get())return;reconnectAttempt=0;cancelReconnect();listener.onState("Network available · reconnecting");connect();}
     void stop(boolean revoke){stopped.set(true);cancelReconnect();connecting.set(false);WebSocket s=ws;if(s!=null){if(revoke){try{s.send(new JSONObject().put("jsonrpc","2.0").put("method","workspace/revoke").put("params",new JSONObject()).toString());}catch(Exception ignored){}}s.close(1000,"user disconnect");}ws=null;if(revoke)state.clearCredentials();listener.onState("Disconnected");}
 
     private JSONArray capabilities(){JSONArray out=new JSONArray();for(int i=0;i<readCaps.length();i++)out.put(readCaps.optString(i));if("write".equals(state.mode())){out.put("file_edit").put("directory_create").put("workspace_clear").put("code_edit");}return out;}
@@ -90,7 +91,7 @@ final class ProtocolClient extends WebSocketListener {
     private void stage(WebSocket socket,String id,String tool,String stage)throws Exception{socket.send(new JSONObject().put("jsonrpc","2.0").put("method","workspace/tool_stage").put("params",new JSONObject().put("request_id",id).put("tool",tool).put("stage",stage)).toString());}
     private JSONObject resultMessage(Object id,JSONObject data,boolean error)throws Exception{JSONObject r=new JSONObject().put("content",new JSONArray().put(new JSONObject().put("type","text").put("text",data.toString()))).put("structuredContent",data).put("isError",error);return new JSONObject().put("jsonrpc","2.0").put("id",id==null?JSONObject.NULL:id).put("result",r);}
     @Override public void onClosed(WebSocket socket,int code,String reason){if(socket!=ws)return;ws=null;connecting.set(false);if(code==4003){state.clearPairCode();handoffCode="";}if(!stopped.get())scheduleReconnect("Disconnected ("+code+")");}
-    @Override public void onFailure(WebSocket socket,Throwable t,Response response){if(socket!=ws)return;ws=null;connecting.set(false);if(!stopped.get())scheduleReconnect("Connection lost");}
+    @Override public void onFailure(WebSocket socket,Throwable t,Response response){if(socket!=ws)return;ws=null;connecting.set(false);String detail=t==null?"unknown":t.getClass().getSimpleName()+(t.getMessage()==null?"":" · "+t.getMessage());Log.w(TAG,"WebSocket failure: "+detail,t);if(!stopped.get())scheduleReconnect("Connection lost · "+detail);}
     private synchronized void cancelReconnect(){ScheduledFuture<?> f=reconnectFuture;if(f!=null)f.cancel(false);reconnectFuture=null;}
     private synchronized void scheduleReconnect(String message){if(stopped.get())return;connecting.set(false);ScheduledFuture<?> f=reconnectFuture;if(f!=null&&!f.isDone())return;listener.onState(message+" · reconnecting");long delay=Math.min(30,1L<<Math.min(5,reconnectAttempt++));reconnectFuture=timer.schedule(()->{synchronized(ProtocolClient.this){reconnectFuture=null;}connect();},delay,TimeUnit.SECONDS);}
 }

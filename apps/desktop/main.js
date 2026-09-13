@@ -11,6 +11,10 @@ const SESSION_PARTITION = 'persist:ailinux-workspace';
 const PROTOCOLS = ['ailinux-helper', 'ailinux-workspace'];
 const startHidden = process.argv.includes('--background');
 const PLATFORM_LABEL = process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux';
+let designTokens = {};
+try { designTokens = JSON.parse(fs.readFileSync(path.join(__dirname, 'design-tokens.json'), 'utf8')); } catch {}
+const DARK_TOKENS = designTokens?.modes?.dark || {};
+const NATIVE_BACKGROUND = DARK_TOKENS.background || '#071018';
 
 let window = null;
 let tray = null;
@@ -243,7 +247,7 @@ function createWindow() {
     minHeight: 560,
     show: false,
     title: `${APP_NAME} · ${PLATFORM_LABEL}`,
-    backgroundColor: '#0d0f12',
+    backgroundColor: NATIVE_BACKGROUND,
     autoHideMenuBar: true,
     webPreferences: {
       partition: SESSION_PARTITION,
