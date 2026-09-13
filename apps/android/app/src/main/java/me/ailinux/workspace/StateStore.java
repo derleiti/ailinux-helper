@@ -12,9 +12,7 @@ final class StateStore {
         String next = uri == null ? "" : uri.toString();
         String previous = prefs.getString("tree_uri", "");
         boolean changed = !next.equals(previous);
-        SharedPreferences.Editor editor = prefs.edit().putString("tree_uri", next);
-        if (changed) editor.remove("pair_code").remove("resume_token");
-        editor.apply();
+        prefs.edit().putString("tree_uri", next).apply();
         return changed;
     }
     Uri tree() { String v = prefs.getString("tree_uri", ""); return v == null || v.isEmpty() ? null : Uri.parse(v); }
@@ -32,5 +30,14 @@ final class StateStore {
     String resumeToken() { return prefs.getString("resume_token", ""); }
     void setShellReleased(boolean released) { prefs.edit().putBoolean("shell_released", released).apply(); }
     boolean shellReleased() { return prefs.getBoolean("shell_released", false); }
+    void setResourceAdvertise(boolean enabled) { prefs.edit().putBoolean("resource_advertise", enabled).apply(); }
+    boolean resourceAdvertise() { return prefs.getBoolean("resource_advertise", false); }
+    void setRemoteCompute(boolean enabled) { prefs.edit().putBoolean("remote_compute", enabled).apply(); }
+    boolean remoteCompute() { return prefs.getBoolean("remote_compute", false); }
+    void setVisibility(String visibility) {
+        String value = "public".equals(visibility) || "unlisted".equals(visibility) ? visibility : "private";
+        prefs.edit().putString("visibility", value).apply();
+    }
+    String visibility() { return prefs.getString("visibility", "private"); }
     void clearCredentials() { prefs.edit().remove("pair_code").remove("resume_token").apply(); }
 }

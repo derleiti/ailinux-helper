@@ -109,20 +109,26 @@ test('desktop pair-code copy uses trusted local UI clipboard bridge without enab
   assert.doesNotMatch(handler, /deviceShare\.clipboardWrite/);
 });
 
-test('android helper can explicitly start a fresh pairing and folder changes cannot resurrect a stale code', () => {
+test('android folder changes rebind the live share while fresh pairing stays explicit', () => {
   const activity = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'MainActivity.java'), 'utf8');
   const service = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'WorkspaceService.java'), 'utf8');
   const stateStore = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'StateStore.java'), 'utf8');
+  const protocol = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
   assert.match(activity, /Generate new pair code/);
   assert.match(activity, /beginFreshPairing/);
   assert.match(activity, /showPairCode\("",true\)/);
   assert.match(activity, /boolean changed=state\.setTree\(uri\)/);
+  assert.match(activity, /if\(changed\)rebindShare\("Workspace changed/);
+  assert.match(activity, /Stop sharing workspace/);
+  assert.match(activity, /ACTION_RECONNECT/);
   assert.match(service, /ACTION_NEW_PAIR/);
-  assert.match(service, /startForeground\(8606.*ACTION_NEW_PAIR\.equals\(intent\.getAction\(\)\).*client\.stop\(true\);client\.start\(\)/s);
-  assert.match(stateStore, /boolean setTree\(Uri uri\)/);
-  assert.match(stateStore, /if \(changed\) editor\.remove\("pair_code"\)\.remove\("resume_token"\)/);
-  const protocol = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
+  assert.match(service, /ACTION_RECONNECT\.equals\(intent\.getAction\(\)\)\)\{client\.stop\(false\);client\.start\(\)/);
+  assert.match(service, /ACTION_NEW_PAIR\.equals\(intent\.getAction\(\)\)\)\{client\.stop\(true\);client\.start\(\)/);
+  const setTree = stateStore.match(/boolean setTree\(Uri uri\)[\s\S]*?return changed;\s*\}/)?.[0] || '';
+  assert.match(setTree, /putString\("tree_uri", next\)/);
+  assert.doesNotMatch(setTree, /pair_code|resume_token/);
   assert.match(protocol, /if\(revoke\)\{handoffCode="";state\.clearCredentials\(\);\}/);
+  assert.match(protocol, /listener\.onPairCode\(""\)/);
 });
 
 test('desktop helper exposes a separately released native shell bridge', () => {
@@ -142,21 +148,40 @@ test('desktop helper exposes a separately released native shell bridge', () => {
   assert.match(preload, /runShell/);
 });
 
-test('android helper gates Termux shell capability behind explicit release', () => {
+test('android Termux remains device-local and is never advertised as a public share tool', () => {
   const root = path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main');
   const protocol = fs.readFileSync(path.join(root, 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
   const stateStore = fs.readFileSync(path.join(root, 'java', 'me', 'ailinux', 'workspace', 'StateStore.java'), 'utf8');
   const activity = fs.readFileSync(path.join(root, 'java', 'me', 'ailinux', 'workspace', 'MainActivity.java'), 'utf8');
   const manifest = fs.readFileSync(path.join(root, 'AndroidManifest.xml'), 'utf8');
   const termux = fs.readFileSync(path.join(root, 'java', 'me', 'ailinux', 'workspace', 'TermuxShell.java'), 'utf8');
-  assert.match(protocol, /if\(shell\.released\(\)\)out\.put\("shell"\)/);
-  assert.match(protocol, /case"shell":return shell\.run/);
+  assert.doesNotMatch(protocol, /out\.put\("shell"\)/);
+  assert.doesNotMatch(protocol, /case"shell"/);
   assert.match(stateStore, /setShellReleased/);
-  assert.match(activity, /Release terminal to the AI \(Termux\)/);
+  assert.match(activity, /not shared to AI/);
   assert.match(manifest, /com\.termux\.permission\.RUN_COMMAND/);
   assert.match(manifest, /<package android:name="com\.termux"/);
   assert.match(termux, /terminal not released by the user/);
   assert.match(termux, /RUN_COMMAND_WORKDIR/);
+});
+
+test('android share profile supports native-only resource advertisement and remote compute preference', () => {
+  const root = path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace');
+  const protocol = fs.readFileSync(path.join(root, 'ProtocolClient.java'), 'utf8');
+  const stateStore = fs.readFileSync(path.join(root, 'StateStore.java'), 'utf8');
+  const activity = fs.readFileSync(path.join(root, 'MainActivity.java'), 'utf8');
+  assert.match(protocol, /if\(state\.tree\(\)==null\)return out/);
+  for (const cap of ['workspace_info','file_read','file_tree','code_read','code_tree','code_search','code_grep','file_ops']) assert.ok(protocol.includes(`.put("${cap}")`), `missing Android read capability: ${cap}`);
+  for (const cap of ['file_edit','directory_create','workspace_clear','code_edit']) assert.ok(protocol.includes(`.put("${cap}")`), `missing Android write capability: ${cap}`);
+  assert.match(protocol, /state\.resourceAdvertise\(\)/);
+  assert.match(protocol, /resources\.put\("inventory",deviceResources\(\)\)/);
+  assert.match(protocol, /remote_requested/);
+  assert.match(protocol, /state\.tree\(\)==null\?"off":state\.mode\(\)/);
+  assert.match(stateStore, /resource_advertise/);
+  assert.match(stateStore, /remote_compute/);
+  assert.match(stateStore, /visibility/);
+  assert.match(activity, /Advertise device CPU \/ RAM metadata/);
+  assert.match(activity, /Prefer remote cluster compute/);
 });
 
 test('desktop package explicitly ships the shell backend module', () => {

@@ -26,7 +26,7 @@
     "macos",
     "web"
   ],
-  "version": "2.90.11",
+  "version": "2.90.12",
   "lifecycle": {
     "desktop": "tray-resident transport",
     "android": "foreground-service transport",

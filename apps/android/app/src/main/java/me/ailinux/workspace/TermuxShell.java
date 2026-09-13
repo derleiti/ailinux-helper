@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.DocumentsContract;
+import androidx.core.content.ContextCompat;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -23,7 +24,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * Android has no generic process API for other apps, so the terminal is served
  * by Termux through its RUN_COMMAND service. Two gates apply, exactly like the
  * desktop backends: the backend must actually be available, and the user must
- * have released the terminal. Capabilities are never advertised otherwise.
+ * have released the terminal. This remains a device-local special function and
+ * is never advertised as a public AI-network capability.
  *
  * Requirements on the device:
  *   1. Termux installed (F-Droid / GitHub build, not the Play Store build)
@@ -130,11 +132,7 @@ final class TermuxShell {
             }
         };
         IntentFilter filter = new IntentFilter(RESULT_ACTION);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            context.registerReceiver(receiver, filter);
-        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
         try {
             Intent callback = new Intent(RESULT_ACTION).setPackage(context.getPackageName());
             int pendingFlags = PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_UPDATE_CURRENT;

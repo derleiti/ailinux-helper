@@ -27,7 +27,7 @@ jobs:
               --verify-tag \
               --prerelease \
               --title "AILinux Helper ${GITHUB_REF_NAME#v}" \
-              --notes "AILinux Helper ${GITHUB_REF_NAME#v}: Android re-pair/folder reset fix plus native AppImage clipboard and context-menu fixes."
+              --notes "AILinux Helper ${GITHUB_REF_NAME#v}: live Android share rebinding, native resource advertisement, remote-compute preference, device-local Termux hardening, and typed desktop service control."
       - name: Branch build only
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: echo "No release upload for branch build."
@@ -148,12 +148,14 @@ jobs:
           set -euo pipefail
           assets=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
           printf '%s\n' "$assets"
+          version="${GITHUB_REF_NAME#v}"
+          escaped_version="${version//./\\.}"
           for pattern in \
-            '^AILinux-Helper-2\.90\.9-linux-.*\.AppImage$' \
-            '^AILinux-Helper-2\.90\.9-linux-.*\.deb$' \
-            '^AILinux-Helper-2\.90\.9-win-.*\.exe$' \
-            '^AILinux-Helper-2\.90\.9-mac-.*\.dmg$' \
-            '^AILinux-Helper-2\.90\.9-android\.apk$' \
+            "^AILinux-Helper-${escaped_version}-linux-.*\.AppImage$" \
+            "^AILinux-Helper-${escaped_version}-linux-.*\.deb$" \
+            "^AILinux-Helper-${escaped_version}-win-.*\.exe$" \
+            "^AILinux-Helper-${escaped_version}-mac-.*\.dmg$" \
+            "^AILinux-Helper-${escaped_version}-android\.apk$" \
             '^SHA256SUMS-linux\.txt$' \
             '^SHA256SUMS-windows\.txt$' \
             '^SHA256SUMS-macos\.txt$' \
