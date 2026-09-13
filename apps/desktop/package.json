@@ -1,6 +1,6 @@
 {
   "name": "@ailinux/helper-desktop",
-  "version": "2.90.0",
+  "version": "2.90.1",
   "private": true,
   "description": "AILinux Helper cross-platform device companion for Linux, Windows and macOS",
   "main": "main.js",
@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "electron": "44.3.0",
-    "electron-builder": "26.0.12"
+    "electron-builder": "^26.15.3"
   },
   "productName": "AILinux Helper",
   "build": {
@@ -46,7 +46,8 @@
       "category": "Development",
       "synopsis": "AILinux cross-platform local device helper",
       "maintainer": "AILinux <admin@ailinux.me>",
-      "icon": "../../assets/desktop/icon.png"
+      "icon": "../../assets/desktop/icon.png",
+      "syncDesktopName": true
     },
     "deb": {
       "priority": "optional"
@@ -77,7 +78,8 @@
         "from": "../../assets/desktop/icon.png",
         "to": "icon.png"
       }
-    ]
+    ],
+    "executableName": "ailinux-helper"
   },
   "author": {
     "name": "AILinux",
@@ -87,5 +89,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/derleiti/ailinux-helper.git"
-  }
+  },
+  "desktopName": "ailinux-helper.desktop"
 }
