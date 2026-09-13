@@ -29,8 +29,8 @@ android {
         applicationId 'me.ailinux.workspace'
         minSdk 26
         targetSdk 35
-        versionCode 14
-        versionName '2.90.7'
+        versionCode 15
+        versionName '2.90.8'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     buildTypes {
