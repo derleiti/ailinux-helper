@@ -3,7 +3,9 @@
 const { app, BrowserWindow, Menu, Tray, nativeImage, Notification, powerSaveBlocker, session, shell, clipboard, desktopCapturer, ipcMain, screen, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const shellBackends = require('./shell_backends');
+const dockerRuntime = require('./docker_runtime');
 
 const APP_NAME = 'AILinux Helper';
 const START_URL = 'https://api.ailinux.me/v1/mcp';
@@ -26,7 +28,14 @@ let connectionState = 'Starting';
 let lastNotifiedState = '';
 let statusTimer = null;
 
-let deviceShare = { clipboardRead: false, clipboardWrite: false, screenObserve: false };
+let deviceShare = {
+  clipboardRead: false,
+  clipboardWrite: false,
+  screenObserve: false,
+  resourceAdvertise: false,
+  computeAdvertise: false,
+  mcpAdvertise: false,
+};
 
 function deviceSharePath() {
   return path.join(app.getPath('userData'), 'mcp-device-share.json');
@@ -39,6 +48,9 @@ function loadDeviceShare() {
       clipboardRead: raw.clipboardRead === true,
       clipboardWrite: raw.clipboardWrite === true,
       screenObserve: raw.screenObserve === true,
+      resourceAdvertise: raw.resourceAdvertise === true,
+      computeAdvertise: raw.computeAdvertise === true,
+      mcpAdvertise: raw.mcpAdvertise === true,
     };
   } catch {}
 }
@@ -50,6 +62,65 @@ function saveDeviceShare() {
     fs.writeFileSync(tmp, JSON.stringify(deviceShare, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, deviceSharePath());
   } catch {}
+}
+
+
+function publicShareProfile() {
+  const docker = shellBackends.backendAvailable('docker');
+  const shellState = shellBackends.status();
+  // A docker binary on PATH is not a running engine. If the last detection saw
+  // the daemon down, compute must not be advertised even when it was released.
+  const engineState = dockerRuntime.cachedEngine();
+  const engineDown = Boolean(engineState) && engineState.engine !== dockerRuntime.ENGINE_RUNNING;
+  const dockerReleased = docker[0] === true && shellState.released === true && shellState.backend === 'docker' && !engineDown;
+  return {
+    visibility: 'private',
+    workspace: { enabled: true, mode: 'selected-in-webapp' },
+    clipboard: { read: deviceShare.clipboardRead, write: deviceShare.clipboardWrite },
+    display: { observe: deviceShare.screenObserve, control: false },
+    resources: { advertise: deviceShare.resourceAdvertise },
+    compute: { advertise: deviceShare.computeAdvertise && dockerReleased, runtime: 'docker', available: docker[0] === true && !engineDown, engine: engineState ? engineState.engine : 'unknown', released: dockerReleased, workspaceMode: shellState.workspaceMode || 'read_only', detail: dockerReleased ? shellState.workspace : (engineDown ? engineState.detail : docker[1]) },
+    mcp: { advertise: deviceShare.mcpAdvertise },
+  };
+}
+
+async function publicResourceInventory() {
+  const profile = publicShareProfile();
+  if (!deviceShare.resourceAdvertise) return { shared: false };
+  let gpu = {};
+  try { gpu = await app.getGPUInfo('basic'); } catch {}
+  return {
+    shared: true,
+    platform: process.platform,
+    arch: process.arch,
+    cpu: { logical_cores: os.cpus().length, model: os.cpus()[0]?.model || '' },
+    memory: { total_bytes: os.totalmem(), free_bytes: os.freemem() },
+    displays: screen.getAllDisplays().map((d) => ({ id: String(d.id), width: d.size.width, height: d.size.height, scale_factor: d.scaleFactor })),
+    gpu,
+    compute: profile.compute,
+  };
+}
+
+function updateDeviceShare(patch = {}) {
+  const allowed = ['clipboardRead', 'clipboardWrite', 'screenObserve', 'resourceAdvertise', 'computeAdvertise', 'mcpAdvertise'];
+  for (const key of allowed) if (Object.prototype.hasOwnProperty.call(patch, key)) deviceShare[key] = patch[key] === true;
+  if (deviceShare.computeAdvertise && !shellBackends.backendAvailable('docker')[0]) deviceShare.computeAdvertise = false;
+  saveDeviceShare();
+  rebuildTrayMenu();
+  try { window?.webContents?.send('ailinux:share-profile-changed', publicShareProfile()); } catch {}
+  return publicShareProfile();
+}
+
+async function confirmPrivilegedAction(action, detail) {
+  try {
+    const answer = await dialog.showMessageBox(window || null, {
+      type: 'warning', buttons: ['Cancel', 'Continue'], defaultId: 0, cancelId: 0,
+      title: APP_NAME, message: 'Allow the Helper to ' + action + '?', detail: String(detail || ''),
+    });
+    return answer.response === 1;
+  } catch {
+    return false;
+  }
 }
 
 function trustedIpc(event) {
@@ -86,10 +157,17 @@ async function releaseHostShell() {
     properties: ['openDirectory'],
   });
   if (picked.canceled || !picked.filePaths.length) return shellBackends.status();
-  const granted = shellBackends.grantRelease(picked.filePaths[0]);
+  // Read-only is the safe default; read/write must be chosen deliberately.
+  const access = await dialog.showMessageBox(window, {
+    type: 'question', buttons: ['Read only', 'Read/Write', 'Cancel'], defaultId: 0, cancelId: 2,
+    title: APP_NAME, message: 'How may compute access this folder?',
+    detail: 'Read only mounts the folder immutably inside the disposable container. Read/Write lets commands modify files on this device.',
+  });
+  if (access.response === 2) return shellBackends.status();
+  const granted = shellBackends.grantRelease(picked.filePaths[0], { mode: access.response === 1 ? 'read_write' : 'read_only' });
   broadcastShellState(granted);
   if (Notification.isSupported()) {
-    new Notification({ title: APP_NAME, body: `Terminal released: ${granted.label}\n${granted.workspace}`, silent: true }).show();
+    new Notification({ title: APP_NAME, body: `Terminal released: ${granted.label} (${granted.workspaceMode})\n${granted.workspace}`, silent: true }).show();
   }
   return granted;
 }
@@ -105,7 +183,52 @@ function registerHelperIpc() {
       computer_observe: deviceShare.screenObserve,
       computer_click: false,
       computer_type: false,
+      shell: publicShareProfile().compute.advertise,
+      share_profile: publicShareProfile(),
     };
+  });
+  ipcMain.handle('ailinux-helper:get-share-profile', (event) => {
+    assertTrustedIpc(event);
+    return publicShareProfile();
+  });
+  ipcMain.handle('ailinux-helper:set-share-profile', (event, patch) => {
+    assertTrustedIpc(event);
+    return updateDeviceShare(patch && typeof patch === 'object' ? patch : {});
+  });
+  ipcMain.handle('ailinux-helper:get-resource-inventory', async (event) => {
+    assertTrustedIpc(event);
+    return publicResourceInventory();
+  });
+  // Docker is required for compute only. Status is read-only; every mutating
+  // action needs a local confirmation dialog on top of the trusted-IPC check,
+  // so a page can never start, stop or install anything on its own.
+  ipcMain.handle('ailinux-helper:docker-status', async (event) => {
+    assertTrustedIpc(event);
+    return dockerRuntime.detect();
+  });
+  ipcMain.handle('ailinux-helper:docker-service', async (event, action) => {
+    assertTrustedIpc(event);
+    const name = String(action || '');
+    if (!dockerRuntime.SERVICE_ACTIONS.includes(name)) return { ok: false, error: 'unsupported service action: ' + name };
+    const allowed = await confirmPrivilegedAction(name + ' the Docker engine', 'The Docker service on this device will be changed. Running containers may be affected.');
+    if (!allowed) return { ok: false, action: name, error: 'cancelled by user' };
+    const result = await dockerRuntime.serviceAction(name);
+    rebuildTrayMenu();
+    return result;
+  });
+  ipcMain.handle('ailinux-helper:docker-install', async (event) => {
+    assertTrustedIpc(event);
+    const plan = dockerRuntime.installPlan();
+    if (!plan.supported) return { ok: false, manual: true, error: plan.hint, downloadUrl: plan.downloadUrl };
+    const allowed = await confirmPrivilegedAction('install Docker', plan.hint);
+    if (!allowed) return { ok: false, error: 'cancelled by user' };
+    const result = await dockerRuntime.install();
+    rebuildTrayMenu();
+    return result;
+  });
+  ipcMain.handle('ailinux-helper:docker-test', async (event) => {
+    assertTrustedIpc(event);
+    return dockerRuntime.testContainer();
   });
   ipcMain.handle('ailinux-helper:ui-clipboard-write', (event, text) => {
     assertTrustedIpc(event);
@@ -265,9 +388,12 @@ function rebuildTrayMenu() {
     {
       label: 'MCP device sharing',
       submenu: [
-        { label: 'Share clipboard read', type: 'checkbox', checked: deviceShare.clipboardRead, click: (item) => { deviceShare.clipboardRead = item.checked; saveDeviceShare(); rebuildTrayMenu(); } },
-        { label: 'Share clipboard write', type: 'checkbox', checked: deviceShare.clipboardWrite, click: (item) => { deviceShare.clipboardWrite = item.checked; saveDeviceShare(); rebuildTrayMenu(); } },
-        { label: 'Share screen observation', type: 'checkbox', checked: deviceShare.screenObserve, click: (item) => { deviceShare.screenObserve = item.checked; saveDeviceShare(); rebuildTrayMenu(); } },
+        { label: 'Share clipboard read', type: 'checkbox', checked: deviceShare.clipboardRead, click: (item) => updateDeviceShare({ clipboardRead: item.checked }) },
+        { label: 'Share clipboard write', type: 'checkbox', checked: deviceShare.clipboardWrite, click: (item) => updateDeviceShare({ clipboardWrite: item.checked }) },
+        { label: 'Share screen observation', type: 'checkbox', checked: deviceShare.screenObserve, click: (item) => updateDeviceShare({ screenObserve: item.checked }) },
+        { label: 'Share CPU/RAM/GPU metadata', type: 'checkbox', checked: deviceShare.resourceAdvertise, click: (item) => updateDeviceShare({ resourceAdvertise: item.checked }) },
+        { label: 'Advertise Docker compute', type: 'checkbox', checked: deviceShare.computeAdvertise, enabled: shellBackends.backendAvailable('docker')[0], click: (item) => updateDeviceShare({ computeAdvertise: item.checked }) },
+        { label: 'Advertise local MCP bridge', type: 'checkbox', checked: deviceShare.mcpAdvertise, click: (item) => updateDeviceShare({ mcpAdvertise: item.checked }) },
         { label: 'Mouse/keyboard control: unavailable', enabled: false },
       ],
     },

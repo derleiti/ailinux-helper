@@ -10,6 +10,7 @@
  */
 
 const { execFile } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -17,6 +18,14 @@ const SANDBOXED_BACKENDS = new Set(['bubblewrap', 'docker']);
 const ENV_BACKEND = 'AILINUX_SHELL_BACKEND';
 const ENV_DOCKER_IMAGE = 'AILINUX_SHELL_DOCKER_IMAGE';
 const ENV_DOCKER_NETWORK = 'AILINUX_SHELL_DOCKER_NETWORK';
+const ENV_DOCKER_MEMORY = 'AILINUX_SHELL_DOCKER_MEMORY';
+const ENV_DOCKER_CPUS = 'AILINUX_SHELL_DOCKER_CPUS';
+const ENV_DOCKER_USER = 'AILINUX_SHELL_DOCKER_USER';
+
+/** Label used to find and destroy every container this Helper started. */
+const COMPUTE_LABEL = 'me.ailinux.helper.compute';
+
+const WORKSPACE_MODES = new Set(['read_only', 'read_write']);
 
 let selectedBackend = '';
 
@@ -89,6 +98,8 @@ function availableBackends() {
 
 function setBackend(name) {
   const candidate = String(name || '').trim().toLowerCase();
+  // An empty name clears the pin and returns to automatic detection.
+  if (!candidate) { selectedBackend = ''; return status(); }
   if (!BACKEND_LABELS[candidate]) throw new Error(`unknown backend: ${candidate}`);
   const [ok, detail] = backendAvailable(candidate);
   if (!ok) throw new Error(`backend unavailable: ${detail}`);
@@ -123,19 +134,47 @@ function detectBackend() {
 }
 
 /** Release state lives in the main process; the renderer can never set it directly. */
-const release = { granted: false, root: '', at: 0 };
+const release = { granted: false, root: '', at: 0, mode: 'read_write', session: '' };
 
-function grantRelease(root) {
+function grantRelease(root, options) {
+  const mode = String((options && options.mode) || 'read_write');
   release.granted = true;
   release.root = root ? path.resolve(root) : '';
   release.at = Date.now();
+  release.mode = WORKSPACE_MODES.has(mode) ? mode : 'read_write';
+  release.session = crypto.randomBytes(6).toString('hex');
   return status();
 }
 
+/**
+ * Destroy every disposable container this Helper started for the given session.
+ * Fire-and-forget on purpose: revoking must never block the UI thread, and a
+ * container that is already gone is not an error.
+ */
+function destroyComputeContainers(session) {
+  return new Promise((resolve) => {
+    const docker = which('docker');
+    const label = session ? `${COMPUTE_LABEL}=${session}` : COMPUTE_LABEL;
+    if (!docker) { resolve({ ok: true, removed: [], detail: 'docker not installed' }); return; }
+    execFile(docker, ['ps', '-aq', '--filter', `label=${label}`], { timeout: 15000, windowsHide: true }, (error, stdout) => {
+      const ids = String(stdout || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+      if (error || !ids.length) { resolve({ ok: !error, removed: [], detail: error ? 'container lookup failed' : 'nothing to remove' }); return; }
+      execFile(docker, ['rm', '-f', ...ids], { timeout: 60000, windowsHide: true }, (rmError) => {
+        resolve({ ok: !rmError, removed: ids, detail: rmError ? 'container removal failed' : 'disposable compute destroyed' });
+      });
+    });
+  });
+}
+
 function revokeRelease() {
+  const session = release.session;
   release.granted = false;
   release.root = '';
   release.at = 0;
+  release.mode = 'read_write';
+  release.session = '';
+  // Revoking a share must also tear down anything still running under it.
+  if (session) destroyComputeContainers(session).catch(() => {});
   return status();
 }
 
@@ -151,6 +190,8 @@ function status() {
     sandboxed,
     released: Boolean(backend) && release.granted && Boolean(release.root),
     workspace: release.root,
+    workspaceMode: release.granted ? release.mode : 'read_only',
+    session: release.session,
     releasedAt: release.at,
     detail,
     backends: availableBackends(),
@@ -199,10 +240,26 @@ function buildPlan(command, cwd) {
   }
 
   if (state.backend === 'docker') {
-    const args = ['run', '--rm', '-i', '--network', envValue(ENV_DOCKER_NETWORK) || 'none',
-      '-v', `${state.workspace}:/workspace`, '-w', workdir,
-      envValue(ENV_DOCKER_IMAGE), '/bin/sh', '-c', text];
-    return { backend: 'docker', sandboxed: true, file: 'docker', args, cwd: undefined };
+    // Disposable by construction: --rm, no network, no capabilities, no new
+    // privileges, read-only rootfs and hard resource limits. The workspace is
+    // the ONLY host path handed in, and it is mounted read-only unless the user
+    // explicitly released read/write. The docker socket is never mounted.
+    const readOnlyWorkspace = state.workspaceMode !== 'read_write';
+    const args = ['run', '--rm', '-i',
+      '--network', envValue(ENV_DOCKER_NETWORK) || 'none',
+      '--cap-drop', 'ALL',
+      '--security-opt', 'no-new-privileges',
+      '--read-only',
+      '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',
+      '--pids-limit', '256',
+      '--memory', envValue(ENV_DOCKER_MEMORY) || '2g',
+      '--cpus', envValue(ENV_DOCKER_CPUS) || '2',
+      '--label', `${COMPUTE_LABEL}=${state.session}`];
+    const user = envValue(ENV_DOCKER_USER) || (typeof process.getuid === 'function' ? `${process.getuid()}:${process.getgid()}` : '');
+    if (user) args.push('--user', user);
+    args.push('-v', `${state.workspace}:/workspace:${readOnlyWorkspace ? 'ro' : 'rw'}`, '-w', workdir,
+      envValue(ENV_DOCKER_IMAGE), '/bin/sh', '-c', text);
+    return { backend: 'docker', sandboxed: true, file: which('docker') || 'docker', args, cwd: undefined, workspaceMode: state.workspaceMode };
   }
 
   if (state.backend === 'powershell') {
@@ -250,6 +307,7 @@ function runShell({ command, cwd, timeout } = {}) {
 
 module.exports = {
   SANDBOXED_BACKENDS, BACKEND_LABELS, ENV_BACKEND, ENV_DOCKER_IMAGE, ENV_DOCKER_NETWORK,
+  ENV_DOCKER_MEMORY, ENV_DOCKER_CPUS, ENV_DOCKER_USER, COMPUTE_LABEL, destroyComputeContainers,
   detectBackend, backendAvailable, availableBackends, setBackend, status, grantRelease, revokeRelease,
   buildPlan, runShell, resolveWithin, posixArgs, which,
 };

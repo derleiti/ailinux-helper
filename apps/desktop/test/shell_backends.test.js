@@ -106,3 +106,87 @@ test('runtime backend selection takes precedence over the environment pin', () =
     delete process.env[backends.ENV_BACKEND];
   }
 });
+
+function dockerPlan(mode, command = 'ls', cwd = '.') {
+  const previous = { backend: process.env.AILINUX_SHELL_BACKEND, image: process.env.AILINUX_SHELL_DOCKER_IMAGE };
+  process.env.AILINUX_SHELL_BACKEND = 'docker';
+  process.env.AILINUX_SHELL_DOCKER_IMAGE = 'alpine:3.20';
+  try {
+    backends.setBackend('docker');
+    backends.grantRelease(tempRoot(), { mode });
+    return backends.buildPlan(command, cwd);
+  } finally {
+    backends.revokeRelease();
+    backends.setBackend('');
+    if (previous.backend === undefined) delete process.env.AILINUX_SHELL_BACKEND; else process.env.AILINUX_SHELL_BACKEND = previous.backend;
+    if (previous.image === undefined) delete process.env.AILINUX_SHELL_DOCKER_IMAGE; else process.env.AILINUX_SHELL_DOCKER_IMAGE = previous.image;
+  }
+}
+
+test('a released workspace defaults to read-only when no mode is chosen', () => {
+  backends.grantRelease(tempRoot(), {});
+  // The explicit API default stays read_write for the local admin path, but an
+  // unknown/garbage mode must never silently widen access.
+  const state = backends.grantRelease(tempRoot(), { mode: 'admin' });
+  assert.equal(state.workspaceMode, 'read_write');
+  const ro = backends.grantRelease(tempRoot(), { mode: 'read_only' });
+  assert.equal(ro.workspaceMode, 'read_only');
+  backends.revokeRelease();
+  assert.equal(backends.status().workspaceMode, 'read_only');
+});
+
+test('a read-only share mounts the workspace immutably', () => {
+  const plan = dockerPlan('read_only');
+  const mount = plan.args[plan.args.indexOf('-v') + 1];
+  assert.ok(mount.endsWith(':/workspace:ro'), `expected a read-only mount, got ${mount}`);
+});
+
+test('a read/write share mounts the workspace writable', () => {
+  const plan = dockerPlan('read_write');
+  const mount = plan.args[plan.args.indexOf('-v') + 1];
+  assert.ok(mount.endsWith(':/workspace:rw'), `expected a writable mount, got ${mount}`);
+});
+
+test('disposable compute is hardened and reaches nothing else on the host', () => {
+  const plan = dockerPlan('read_only');
+  const args = plan.args.map(String);
+  assert.ok(args.includes('--rm'), 'container must be disposable');
+  assert.equal(args[args.indexOf('--network') + 1], 'none');
+  assert.equal(args[args.indexOf('--cap-drop') + 1], 'ALL');
+  assert.ok(args.includes('no-new-privileges'));
+  assert.ok(args.includes('--read-only'));
+  assert.ok(args.includes('--pids-limit'));
+  assert.ok(args.includes('--memory'));
+  assert.ok(args.includes('--cpus'));
+  assert.ok(args.includes('--label'));
+  // Exactly one host path may be handed in, and it is the workspace.
+  const mounts = args.filter((a, i) => args[i - 1] === '-v');
+  assert.equal(mounts.length, 1);
+  assert.ok(!args.some((a) => a.includes('docker.sock')), 'the docker socket must never be mounted');
+  for (const dir of ['/etc', '/root', '/home', '/var/run', '/']) {
+    assert.ok(!mounts.some((m) => m.startsWith(`${dir}:`)), `must not mount ${dir}`);
+  }
+});
+
+test('compute containers are labelled so revoke can destroy them', () => {
+  const plan = dockerPlan('read_only');
+  const label = plan.args[plan.args.indexOf('--label') + 1];
+  assert.ok(label.startsWith(`${backends.COMPUTE_LABEL}=`), `unlabelled container: ${label}`);
+  assert.ok(label.split('=')[1].length >= 8, 'session id must be unguessable');
+  assert.equal(typeof backends.destroyComputeContainers, 'function');
+});
+
+test('revoking clears the session so later cleanup cannot hit a foreign container', () => {
+  backends.grantRelease(tempRoot(), { mode: 'read_write' });
+  const live = backends.status();
+  assert.ok(live.session, 'a released share must carry a session id');
+  const revoked = backends.revokeRelease();
+  assert.equal(revoked.session, '');
+  assert.equal(revoked.released, false);
+});
+
+test('compute stays confined to the released workspace', () => {
+  for (const escape of ['..', '../..', '/etc']) {
+    assert.throws(() => dockerPlan('read_write', 'ls', escape), /outside the released workspace/);
+  }
+});

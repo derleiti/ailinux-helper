@@ -171,3 +171,28 @@ test('android Termux result callback is mutable on Android 12 plus', () => {
   assert.doesNotMatch(termux, /PendingIntent\.FLAG_IMMUTABLE/);
   assert.match(termux, /getBundleExtra\("result"\)/);
 });
+
+test('docker control is trusted-IPC gated and locally confirmed', () => {
+  // Status is read-only and may be polled; mutating actions must additionally
+  // pass a local confirmation dialog, so a page cannot act on its own.
+  assert.match(source, /ipcMain\.handle\('ailinux-helper:docker-status'/);
+  for (const channel of ['docker-service', 'docker-install']) {
+    const handler = source.split(`ipcMain.handle('ailinux-helper:${channel}'`)[1] || '';
+    const body = handler.split('});')[0];
+    assert.match(body, /assertTrustedIpc\(event\)/, `${channel} must assert trusted IPC`);
+    assert.match(body, /confirmPrivilegedAction/, `${channel} must ask for local confirmation`);
+  }
+});
+
+test('compute is advertised only when docker is released, never by default', () => {
+  assert.match(source, /computeAdvertise:\s*false/);
+  assert.match(source, /deviceShare\.computeAdvertise && dockerReleased/);
+  assert.match(source, /if \(deviceShare\.computeAdvertise && !shellBackends\.backendAvailable\('docker'\)\[0\]\) deviceShare\.computeAdvertise = false;/);
+});
+
+test('every device share flag defaults to off', () => {
+  const block = source.split('let deviceShare = {')[1].split('};')[0];
+  const flags = block.match(/(\w+):\s*(true|false)/g) || [];
+  assert.ok(flags.length >= 6, 'expected at least six share flags');
+  for (const flag of flags) assert.match(flag, /:\s*false$/, `share flag must default off: ${flag}`);
+});
