@@ -82,6 +82,8 @@ jobs:
   android:
     needs: prepare-release
     runs-on: ubuntu-24.04
+    outputs:
+      signing_available: ${{ steps.signing.outputs.available }}
     env:
       AILINUX_ANDROID_KEYSTORE_B64: ${{ secrets.AILINUX_ANDROID_KEYSTORE_B64 }}
       AILINUX_ANDROID_STORE_PASSWORD: ${{ secrets.AILINUX_ANDROID_STORE_PASSWORD }}
@@ -100,25 +102,28 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Compile and test Android helper
         run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
-      - name: Require production signing for tagged releases
+      - name: Detect production signing for tagged releases
+        id: signing
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
-          set -euo pipefail
-          test -n "$AILINUX_ANDROID_KEYSTORE_B64"
-          test -n "$AILINUX_ANDROID_STORE_PASSWORD"
-          test -n "$AILINUX_ANDROID_KEY_PASSWORD"
+          if [[ -n "$AILINUX_ANDROID_KEYSTORE_B64" && -n "$AILINUX_ANDROID_STORE_PASSWORD" && -n "$AILINUX_ANDROID_KEY_PASSWORD" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Production Android signing is delegated to the trusted AILinux release host."
+          fi
       - name: Configure Android release signing
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && steps.signing.outputs.available == 'true'
         shell: bash
         run: printf '%s' "$AILINUX_ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/ailinux-release.jks"
       - name: Build signed Android release APK
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && steps.signing.outputs.available == 'true'
         env:
           AILINUX_ANDROID_KEYSTORE: ${{ runner.temp }}/ailinux-release.jks
         run: ./gradlew --no-daemon :app:assembleRelease
       - name: Verify and upload signed Android APK
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && steps.signing.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           AILINUX_ANDROID_KEYSTORE: ${{ runner.temp }}/ailinux-release.jks
@@ -155,14 +160,28 @@ jobs:
             "^AILinux-Helper-${escaped_version}-linux-.*\.deb$" \
             "^AILinux-Helper-${escaped_version}-win-.*\.exe$" \
             "^AILinux-Helper-${escaped_version}-mac-.*\.dmg$" \
-            "^AILinux-Helper-${escaped_version}-android\.apk$" \
             '^SHA256SUMS-linux\.txt$' \
             '^SHA256SUMS-windows\.txt$' \
-            '^SHA256SUMS-macos\.txt$' \
-            '^SHA256SUMS-android\.txt$'; do
+            '^SHA256SUMS-macos\.txt$'; do
             grep -Eq "$pattern" <<<"$assets" || { echo "missing release asset matching: $pattern" >&2; exit 1; }
           done
-      - name: Mark release ready
+      - name: Verify CI-signed Android assets
+        if: needs.android.outputs.signing_available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          version="${GITHUB_REF_NAME#v}"
+          escaped_version="${version//./\\.}"
+          grep -Eq "^AILinux-Helper-${escaped_version}-android\.apk$" <<<"$assets"
+          grep -Eq '^SHA256SUMS-android\.txt$' <<<"$assets"
+      - name: Mark fully CI-signed release ready
+        if: needs.android.outputs.signing_available == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest
+      - name: Leave trusted-host Android release pending
+        if: needs.android.outputs.signing_available != 'true'
+        run: echo "Desktop release verified. Waiting for the trusted host to attach and verify the production-signed Android APK."
