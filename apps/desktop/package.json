@@ -1,6 +1,6 @@
 {
   "name": "@ailinux/helper-desktop",
-  "version": "2.89.0",
+  "version": "2.90.0",
   "private": true,
   "description": "AILinux Helper cross-platform device companion for Linux, Windows and macOS",
   "main": "main.js",
@@ -18,7 +18,7 @@
   },
   "productName": "AILinux Helper",
   "build": {
-    "appId": "me.ailinux.workspace.desktop",
+    "appId": "me.ailinux.helper.desktop",
     "productName": "AILinux Helper",
     "artifactName": "AILinux-Helper-${version}-${os}-${arch}.${ext}",
     "files": [
@@ -86,6 +86,6 @@
   "homepage": "https://ailinux.me",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ailinux-me/triforce.git"
+    "url": "https://github.com/derleiti/ailinux-helper.git"
   }
 }
