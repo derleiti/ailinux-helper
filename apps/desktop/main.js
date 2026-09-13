@@ -66,6 +66,38 @@ function saveDeviceShare() {
 }
 
 
+function dockerMemoryMb(value) {
+  const text = String(value || '2g').trim().toLowerCase();
+  const match = text.match(/^([0-9]+(?:\.[0-9]+)?)([kmgt]?)b?$/);
+  if (!match) return 2048;
+  const amount = Number(match[1]);
+  const scale = { '': 1 / (1024 * 1024), k: 1 / 1024, m: 1, g: 1024, t: 1024 * 1024 }[match[2]];
+  return Math.max(1, Math.round(amount * scale));
+}
+
+function computeResourceDescriptor(available, released) {
+  const cores = Math.max(1, os.cpus().length);
+  const cpuLimit = Math.max(0.1, Number(process.env.AILINUX_SHELL_DOCKER_CPUS || 2) || 2);
+  const load = process.platform === 'win32' ? 0 : Math.min(1, Math.max(0, (os.loadavg()[0] || 0) / cores));
+  const id = ('docker-' + os.hostname()).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').slice(0, 96);
+  return {
+    resource_id: id || 'docker-local',
+    node_id: os.hostname(),
+    runtime: 'docker',
+    cpu_cores: cpuLimit,
+    memory_mb: dockerMemoryMb(process.env.AILINUX_SHELL_DOCKER_MEMORY || '2g'),
+    gpu: '',
+    vram_mb: 0,
+    models: [],
+    capabilities: ['container'],
+    max_concurrent: 1,
+    healthy: available,
+    load,
+    available: available && released,
+  };
+}
+
+
 function publicShareProfile() {
   const docker = shellBackends.backendAvailable('docker');
   const shellState = shellBackends.status();
@@ -80,7 +112,7 @@ function publicShareProfile() {
     clipboard: { read: deviceShare.clipboardRead, write: deviceShare.clipboardWrite },
     display: { observe: deviceShare.screenObserve, control: false },
     resources: { advertise: deviceShare.resourceAdvertise },
-    compute: { advertise: deviceShare.computeAdvertise && dockerReleased, runtime: 'docker', available: docker[0] === true && !engineDown, engine: engineState ? engineState.engine : 'unknown', released: dockerReleased, workspaceMode: shellState.workspaceMode || 'read_only', detail: dockerReleased ? shellState.workspace : (engineDown ? engineState.detail : docker[1]) },
+    compute: { advertise: deviceShare.computeAdvertise && dockerReleased, ...computeResourceDescriptor(docker[0] === true && !engineDown, dockerReleased), engine: engineState ? engineState.engine : 'unknown', released: dockerReleased, workspaceMode: shellState.workspaceMode || 'read_only', detail: dockerReleased ? shellState.workspace : (engineDown ? engineState.detail : docker[1]) },
     mcp: { advertise: deviceShare.mcpAdvertise },
   };
 }
@@ -184,7 +216,7 @@ function registerHelperIpc() {
       computer_observe: deviceShare.screenObserve,
       computer_click: false,
       computer_type: false,
-      shell: publicShareProfile().compute.advertise,
+      compute_execute: publicShareProfile().compute.advertise,
       share_profile: publicShareProfile(),
     };
   });

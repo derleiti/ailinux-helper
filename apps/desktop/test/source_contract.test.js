@@ -280,3 +280,22 @@ test('android display projection callbacks cannot revoke a replacement projectio
   assert.match(capture, /if \(projection != ownedProjection\) return/);
   assert.match(capture, /thread\.quitSafely\(\)/);
 });
+
+
+test('desktop compute is advertised through explicit compute_execute and never shell', () => {
+  const capabilityHandler = (source.split("ipcMain.handle('ailinux-helper:get-capabilities'")[1] || '').split("ipcMain.handle('ailinux-helper:get-share-profile'")[0] || '';
+  assert.match(capabilityHandler, /compute_execute:\s*publicShareProfile\(\)\.compute\.advertise/);
+  assert.doesNotMatch(capabilityHandler, /\bshell:\s*publicShareProfile\(\)\.compute\.advertise/);
+  assert.match(source, /deviceShare\.computeAdvertise && dockerReleased/);
+});
+
+
+test('desktop compute advertises bounded docker capacity without claiming host GPU access', () => {
+  assert.match(source, /function computeResourceDescriptor/);
+  assert.match(source, /AILINUX_SHELL_DOCKER_CPUS/);
+  assert.match(source, /AILINUX_SHELL_DOCKER_MEMORY/);
+  assert.match(source, /max_concurrent:\s*1/);
+  assert.match(source, /capabilities:\s*\['container'\]/);
+  assert.match(source, /gpu:\s*''/);
+  assert.match(source, /vram_mb:\s*0/);
+});
