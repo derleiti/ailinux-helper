@@ -1,6 +1,6 @@
 # AILinux Workspace Desktop Helper
 
-> Current Helper release: **2.90.20**. The desktop component is now branded **AILinux Helper**. `ailinux-helper://` is the primary deep-link scheme; `ailinux-workspace://` remains a compatibility alias.
+> Current Helper release: **2.90.21**. The desktop component is now branded **AILinux Helper**. `ailinux-helper://` is the primary deep-link scheme; `ailinux-workspace://` remains a compatibility alias.
 
 Cross-platform Electron shell for `https://api.ailinux.me/v1/mcp`. It keeps the trusted MCP workspace page in a persistent Chromium profile and remains available from the system tray when the window is closed.
 
