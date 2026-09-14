@@ -383,3 +383,21 @@ test('desktop Wayland control ships an XDG RemoteDesktop portal adapter and adve
   assert.match(portal, /NotifyPointerButton/);
   assert.match(portal, /NotifyKeyboardKeysym/);
 });
+
+
+test('android workspace credentials stay out of websocket URLs and device identity is persistent', () => {
+  const root = path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace');
+  const protocol = fs.readFileSync(path.join(root, 'ProtocolClient.java'), 'utf8');
+  const stateStore = fs.readFileSync(path.join(root, 'StateStore.java'), 'utf8');
+  const start = protocol.indexOf('private void openSocket(String key,String code)');
+  const end = protocol.indexOf('@Override public void onOpen', start);
+  const socket = start >= 0 && end > start ? protocol.slice(start, end) : '';
+  assert.doesNotMatch(socket, /[?&](?:pair_code|handoff_code)=/);
+  assert.match(socket, /X-AILinux-Pair-Code/);
+  assert.match(socket, /X-AILinux-Handoff-Code/);
+  assert.match(socket, /X-AILinux-Machine-Id/);
+  assert.match(socket, /state\.machineId\(\)/);
+  assert.match(stateStore, /String machineId\(\)/);
+  assert.match(stateStore, /UUID\.randomUUID\(\)/);
+  assert.match(stateStore, /putString\("machine_id", value\)/);
+});
