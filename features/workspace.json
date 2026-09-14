@@ -38,5 +38,77 @@
     "reconnecting",
     "suspended",
     "offline"
+  ],
+  "mcp_namespace": "aihelper",
+  "canonical_tools": [
+    "aihelper_pair",
+    "aihelper_observe",
+    "aihelper_screenshot",
+    "aihelper_vision_start",
+    "aihelper_vision_status",
+    "aihelper_vision_observe",
+    "aihelper_vision_stop",
+    "aihelper_input",
+    "aihelper_device_info",
+    "aihelper_process_ops",
+    "aihelper_service_ops",
+    "aihelper_app_ops",
+    "aihelper_window_ops",
+    "aihelper_clipboard_read",
+    "aihelper_clipboard_write",
+    "aihelper_compute_execute"
+  ],
+  "wire_compatibility": "Helper transports continue advertising legacy capability names; TriForce maps canonical aihelper_* MCP names at the bridge for cross-version Android/Linux/Windows/macOS compatibility.",
+  "mcp_tools": {
+    "canonical_namespace": "aihelper",
+    "pairing": [
+      "aihelper_pair"
+    ],
+    "vision": [
+      "aihelper_observe",
+      "aihelper_screenshot",
+      "aihelper_vision_start",
+      "aihelper_vision_status",
+      "aihelper_vision_observe",
+      "aihelper_vision_stop"
+    ],
+    "device": [
+      "aihelper_device_info",
+      "aihelper_process_ops",
+      "aihelper_service_ops",
+      "aihelper_app_ops",
+      "aihelper_window_ops",
+      "aihelper_input"
+    ],
+    "clipboard": [
+      "aihelper_clipboard_read",
+      "aihelper_clipboard_write"
+    ],
+    "compute": [
+      "aihelper_compute_execute"
+    ],
+    "legacy_wire_aliases": {
+      "aihelper_observe": "computer_observe",
+      "aihelper_screenshot": "computer_screenshot",
+      "aihelper_vision_start": "vision_start",
+      "aihelper_vision_status": "vision_status",
+      "aihelper_vision_observe": "vision_observe",
+      "aihelper_vision_stop": "vision_stop",
+      "aihelper_device_info": "device_info",
+      "aihelper_process_ops": "process_ops",
+      "aihelper_service_ops": "service_ops",
+      "aihelper_app_ops": "app_ops",
+      "aihelper_window_ops": "window_ops",
+      "aihelper_input": "computer_input",
+      "aihelper_clipboard_read": "clipboard_read",
+      "aihelper_clipboard_write": "clipboard_write",
+      "aihelper_compute_execute": "compute_execute"
+    }
+  },
+  "pairing_actions": [
+    "status",
+    "pair",
+    "reconnect",
+    "disconnect"
   ]
 }
