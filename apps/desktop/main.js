@@ -18,6 +18,7 @@ const PROTOCOLS = ['ailinux-helper', 'ailinux-workspace'];
 const startHidden = process.argv.includes('--background');
 const loomUnified = process.argv.includes('--loom-unified') || process.env.AILINUX_LOOM_UNIFIED === '1';
 const PLATFORM_LABEL = process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux';
+if (process.platform === 'linux' && typeof app.setDesktopName === 'function') app.setDesktopName('ailinux-helper.desktop');
 let designTokens = {};
 try { designTokens = JSON.parse(fs.readFileSync(path.join(__dirname, 'design-tokens.json'), 'utf8')); } catch {}
 const DARK_TOKENS = designTokens?.modes?.dark || {};
@@ -262,7 +263,8 @@ function registerHelperIpc() {
       computer_control_shared: deviceShare.computerControl,
       computer_input: capabilities.computer_input,
       resources_path: process.resourcesPath || '',
-      wayland: Boolean(process.env.WAYLAND_DISPLAY || String(process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland'),
+      linux_session: portableRuntime.linuxSessionType ? portableRuntime.linuxSessionType() : '',
+      wayland: portableRuntime.linuxSessionType ? portableRuntime.linuxSessionType() === 'wayland' : false,
       path_present: Boolean(process.env.PATH),
       dbus_present: Boolean(process.env.DBUS_SESSION_BUS_ADDRESS),
     });

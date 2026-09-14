@@ -169,7 +169,10 @@ class DesktopLiveVision {
         this._event('capture_source_error', { error: String(error?.message || error) });
         callback({});
       }
-    }, { useSystemPicker: true });
+    // Electron documents useSystemPicker as a native macOS picker. On Linux,
+    // Chromium's getDisplayMedia/desktopCapturer path is what reaches the XDG
+    // ScreenCast portal and PipeWire under Wayland, including its user prompt.
+    }, { useSystemPicker: process.platform === 'darwin' });
     this.captureSessionConfigured = true;
   }
 

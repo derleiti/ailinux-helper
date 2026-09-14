@@ -361,7 +361,8 @@ test('desktop live vision keeps one display-media stream instead of reopening th
   assert.match(live, /activeFps: 10/);
   assert.match(live, /getDisplayMedia/);
   assert.match(live, /setDisplayMediaRequestHandler/);
-  assert.match(live, /useSystemPicker:\s*true/);
+  assert.match(live, /useSystemPicker:\s*process\.platform === 'darwin'/);
+  assert.match(live, /XDG[\s\S]*ScreenCast[\s\S]*PipeWire/);
   assert.match(live, /window\.__ailinuxStream/);
   assert.match(live, /toDataURL\('image\/jpeg'/);
   assert.match(live, /this\.active = false;[\s\S]*capture_error/);

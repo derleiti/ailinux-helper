@@ -24,3 +24,13 @@ test('service list uses a typed platform adapter', async () => {
   const result = await runtime.serviceOps({ action: 'list', limit: 2 });
   assert.equal(typeof result.ok, 'boolean');
 });
+
+
+test('linux session detection prefers XDG_SESSION_TYPE and distinguishes X11/Wayland', () => {
+  if (process.platform !== 'linux') return;
+  assert.equal(runtime.linuxSessionType({ XDG_SESSION_TYPE: 'wayland', DISPLAY: ':0' }, []), 'wayland');
+  assert.equal(runtime.linuxSessionType({ XDG_SESSION_TYPE: 'x11', WAYLAND_DISPLAY: 'wayland-0' }, []), 'x11');
+  assert.equal(runtime.linuxSessionType({ WAYLAND_DISPLAY: 'wayland-0' }, []), 'wayland');
+  assert.equal(runtime.linuxSessionType({ DISPLAY: ':0' }, []), 'x11');
+  assert.equal(runtime.linuxSessionType({}, []), 'unknown');
+});

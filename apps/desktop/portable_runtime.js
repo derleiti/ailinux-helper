@@ -67,13 +67,16 @@ let portalSeq = 0;
 let portalBuffer = '';
 const portalPending = new Map();
 
-function linuxWaylandSession() {
-  return process.platform === 'linux' && Boolean(
-    process.env.WAYLAND_DISPLAY ||
-    String(process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' ||
-    process.argv.some((arg) => String(arg).includes('ozone-platform=wayland'))
-  );
+function linuxSessionType(env = process.env, argv = process.argv) {
+  if (process.platform !== 'linux') return '';
+  const declared = String(env.XDG_SESSION_TYPE || '').trim().toLowerCase();
+  if (declared === 'wayland' || declared === 'x11') return declared;
+  if (env.WAYLAND_DISPLAY || argv.some((arg) => String(arg).includes('ozone-platform=wayland'))) return 'wayland';
+  if (env.DISPLAY) return 'x11';
+  return 'unknown';
 }
+
+function linuxWaylandSession() { return linuxSessionType() === 'wayland'; }
 
 function portalInputAvailable() {
   if (process.platform !== 'linux') return false;
@@ -177,6 +180,7 @@ function capabilities() {
     input: Boolean(inputAdapter()),
     window_adapter: windowAdapter() || 'unavailable',
     input_adapter: inputAdapter() || 'unavailable',
+    linux_session: process.platform === 'linux' ? linuxSessionType() : '',
   };
 }
 
@@ -398,4 +402,4 @@ async function computerInput(args = {}) {
   return run(ps, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script, String(x), String(y), action, String(Math.trunc(Number(args.delta_y || 0)))]);
 }
 
-module.exports = { which, run, capabilities, processOps, serviceOps, appOps, windowOps, computerInput, windowAdapter, inputAdapter, linuxWaylandSession, portalInputAvailable };
+module.exports = { which, run, capabilities, processOps, serviceOps, appOps, windowOps, computerInput, windowAdapter, inputAdapter, linuxSessionType, linuxWaylandSession, portalInputAvailable };
