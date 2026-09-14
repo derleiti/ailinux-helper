@@ -59,6 +59,7 @@ final class AndroidAppOps {
 
     private static JSONObject launch(Context context, String requested, String action) throws Exception {
         if (requested == null || requested.trim().isEmpty()) throw new IllegalArgumentException("app is required");
+        JSONObject wake = DeviceControlService.isReady() ? DeviceControlService.ensureScreenInteractive() : new JSONObject();
         PackageManager pm = context.getPackageManager();
         App match = findApp(pm, requested.trim());
         if (match == null) throw new IllegalArgumentException("launcher app not found: " + requested);
@@ -98,7 +99,9 @@ final class AndroidAppOps {
                 throw new IllegalStateException("app launch did not reach foreground: " + match.packageName);
             }
         }
-        return result.put("action", action).put("app", match.label).put("package", match.packageName);
+        return result.put("action", action).put("app", match.label).put("package", match.packageName)
+                .put("screen_interactive", wake.optBoolean("interactive", true))
+                .put("keyguard_locked", wake.optBoolean("keyguard_locked", false));
     }
 
     private static App findApp(PackageManager pm, String requested) {

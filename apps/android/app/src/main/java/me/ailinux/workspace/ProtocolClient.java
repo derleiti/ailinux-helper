@@ -22,7 +22,7 @@ final class ProtocolClient extends WebSocketListener {
     private final Context context; private final StateStore state; private final Listener listener;
     private final OkHttpClient http=new OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).retryOnConnectionFailure(true).build();
     private final ScheduledExecutorService timer=Executors.newSingleThreadScheduledExecutor(); private final ExecutorService tools=Executors.newSingleThreadExecutor();
-    private volatile WebSocket ws; private volatile String handoffCode=""; private volatile int reconnectAttempt=0; private volatile ScheduledFuture<?> reconnectFuture; private final AtomicBoolean stopped=new AtomicBoolean(true); private final AtomicBoolean connecting=new AtomicBoolean(false);
+    private volatile WebSocket ws; private volatile String handoffCode=""; private volatile int reconnectAttempt=0; private volatile ScheduledFuture<?> reconnectFuture; private volatile ScheduledFuture<?> handshakeFuture; private volatile boolean protocolConnected=false; private final AtomicBoolean stopped=new AtomicBoolean(true); private final AtomicBoolean connecting=new AtomicBoolean(false);
     private SafWorkspace workspace;
     private final ScreenCapture screenCapture;
     private final JSONArray readCaps=new JSONArray().put("workspace_info").put("file_read").put("file_tree").put("code_read").put("code_tree").put("code_search").put("code_grep").put("file_ops");
@@ -31,7 +31,7 @@ final class ProtocolClient extends WebSocketListener {
     void setHandoffCode(String code){handoffCode=code==null?"":code.trim().toUpperCase();}
     void start(){stopped.set(false);cancelReconnect();WebSocket current=ws;if(current!=null)return;connect();}
     void onNetworkAvailable(){if(stopped.get()||ws!=null||connecting.get())return;reconnectAttempt=0;cancelReconnect();listener.onState("Network available · reconnecting");connect();}
-    void stop(boolean revoke){stopped.set(true);cancelReconnect();connecting.set(false);WebSocket s=ws;if(s!=null){if(revoke){try{s.send(new JSONObject().put("jsonrpc","2.0").put("method","workspace/revoke").put("params",new JSONObject()).toString());}catch(Exception ignored){}}s.close(1000,"user disconnect");}ws=null;if(revoke){handoffCode="";state.clearCredentials();}listener.onState("Disconnected");}
+    void stop(boolean revoke){stopped.set(true);cancelReconnect();cancelHandshakeWatchdog();protocolConnected=false;connecting.set(false);WebSocket s=ws;if(s!=null){if(revoke){try{s.send(new JSONObject().put("jsonrpc","2.0").put("method","workspace/revoke").put("params",new JSONObject()).toString());}catch(Exception ignored){}}s.close(1000,"user disconnect");}ws=null;if(revoke){handoffCode="";state.clearCredentials();}listener.onState("Disconnected");}
 
     private JSONArray capabilities(){JSONArray out=new JSONArray();if(state.tree()!=null){for(int i=0;i<readCaps.length();i++)out.put(readCaps.optString(i));if("write".equals(state.mode()))out.put("file_edit").put("directory_create").put("workspace_clear").put("code_edit");}if(state.computerControl()&&DeviceControlService.isReady())out.put("computer_observe").put("computer_input").put("app_ops");if(state.screenObserve()&&screenCapture!=null&&screenCapture.isReady())out.put("computer_screenshot").put("vision_start").put("vision_status").put("vision_observe").put("vision_stop");if(state.clipboardRead())out.put("clipboard_read");if(state.clipboardWrite())out.put("clipboard_write");if(state.remoteCompute())out.put("compute_execute");return out;}
     private String workspaceMode(){return state.tree()==null?"off":state.mode();}
@@ -97,8 +97,8 @@ final class ProtocolClient extends WebSocketListener {
         if("handoff_code".equals(key))request.header("X-AILinux-Handoff-Code",code);else request.header("X-AILinux-Pair-Code",code);
         WebSocket previous=ws;WebSocket next=http.newWebSocket(request.build(),this);ws=next;if(previous!=null&&previous!=next)previous.cancel();
     }
-    @Override public void onOpen(WebSocket socket,Response response){if(socket!=ws){socket.cancel();return;}connecting.set(false);cancelReconnect();reconnectAttempt=0;listener.onState("Transport connected");}
-    @Override public void onMessage(WebSocket socket,String text){try{JSONObject msg=new JSONObject(text);String error=msg.optString("error","");if(!error.isEmpty()){if(error.toLowerCase().contains("workspace credential")||error.toLowerCase().contains("pairing code")){connecting.set(false);stopped.set(true);handoffCode="";listener.onState("Pair code invalid or expired · tap Generate new pair code");try{socket.close(1000,"pairing credential rejected");}catch(Exception ignored){}}else listener.onState("Server error · "+error);return;}String method=msg.optString("method","");if("connected".equals(method)){sendHello(socket);return;}if("workspace/shared".equals(method)||"workspace/paired".equals(method)){JSONObject p=msg.optJSONObject("params");if(p!=null&&p.optBoolean("ok",true)){String token=p.optString("resume_token","");if(!token.isEmpty()){state.setResumeToken(token);state.setPairCode("");handoffCode="";listener.onPairCode("");listener.onResumeToken(token);}listener.onState("Workspace connected · "+state.mode());}return;}if("workspace/detached".equals(method)){listener.onState("AI detached · lease retained");return;}if("ping".equals(method)){socket.send(new JSONObject().put("jsonrpc","2.0").put("method","pong").put("params",msg.optJSONObject("params")==null?new JSONObject():msg.optJSONObject("params")).toString());return;}if("tools/call".equals(method)){tools.submit(()->handleToolCall(socket,msg));}}
+    @Override public void onOpen(WebSocket socket,Response response){if(socket!=ws){socket.cancel();return;}connecting.set(false);cancelReconnect();reconnectAttempt=0;protocolConnected=false;startHandshakeWatchdog(socket);listener.onState("Transport connected · waiting for protocol handshake");}
+    @Override public void onMessage(WebSocket socket,String text){try{JSONObject msg=new JSONObject(text);String error=msg.optString("error","");if(!error.isEmpty()){if(error.toLowerCase().contains("workspace credential")||error.toLowerCase().contains("pairing code")){connecting.set(false);stopped.set(true);handoffCode="";cancelHandshakeWatchdog();listener.onState("Pair code invalid or expired · tap Generate new pair code");try{socket.close(1000,"pairing credential rejected");}catch(Exception ignored){}}else listener.onState("Server error · "+error);return;}String method=msg.optString("method","");if("connected".equals(method)){protocolConnected=true;cancelHandshakeWatchdog();sendHello(socket);return;}if("workspace/shared".equals(method)||"workspace/paired".equals(method)){JSONObject p=msg.optJSONObject("params");if(p!=null&&p.optBoolean("ok",true)){String token=p.optString("resume_token","");if(!token.isEmpty()){state.setResumeToken(token);state.setPairCode("");handoffCode="";listener.onPairCode("");listener.onResumeToken(token);}listener.onState("Workspace connected · "+state.mode());}return;}if("workspace/detached".equals(method)){listener.onState("AI detached · lease retained");return;}if("ping".equals(method)){socket.send(new JSONObject().put("jsonrpc","2.0").put("method","pong").put("params",msg.optJSONObject("params")==null?new JSONObject():msg.optJSONObject("params")).toString());return;}if("tools/call".equals(method)){tools.submit(()->handleToolCall(socket,msg));}}
         catch(Exception e){Log.e(TAG,"protocol message",e);listener.onState("Protocol error: "+e.getMessage());}}
     private void sendHello(WebSocket socket)throws Exception{JSONArray caps=capabilities();String mode=workspaceMode();String name=workspace==null?"android-device":workspace.info(caps).optString("workspace","android");socket.send(new JSONObject().put("jsonrpc","2.0").put("method","client/info").put("params",new JSONObject().put("client","ailinux-android-workspace").put("platform","Android "+Build.VERSION.RELEASE).put("hostname",Build.MODEL).put("server_version",VERSION).put("mode","workspace").put("workspace",name).put("access_mode",mode).put("remote_profile",mode)).toString());socket.send(new JSONObject().put("jsonrpc","2.0").put("method","tools/list").put("params",new JSONObject().put("tools",new JSONArray().put("client_workspace_tool"))).toString());socket.send(new JSONObject().put("jsonrpc","2.0").put("method","workspace/share").put("params",new JSONObject().put("task","").put("visibility",state.visibility()).put("access_mode",mode).put("mode",mode).put("capabilities",caps).put("resources",new JSONObject().put("workspace",new JSONObject().put("enabled",workspace!=null).put("mode",mode)).put("native",nativeShareProfile()))).toString());}
     private void handleToolCall(WebSocket socket,JSONObject msg){String id=String.valueOf(msg.opt("id"));String tool="";try{JSONObject outer=msg.getJSONObject("params").getJSONObject("arguments");tool=outer.optString("tool","");stage(socket,id,tool,"started");JSONObject args=outer.optJSONObject("arguments");if(args==null)args=new JSONObject();JSONObject data=execute(tool,args);stage(socket,id,tool,"finished");socket.send(resultMessage(msg.opt("id"),data,false).toString());}catch(Exception e){try{stage(socket,id,tool,"failed");socket.send(resultMessage(msg.opt("id"),new JSONObject().put("ok",false).put("error",String.valueOf(e.getMessage())),true).toString());}catch(Exception ignored){}}}
@@ -113,7 +113,7 @@ final class ProtocolClient extends WebSocketListener {
         // OkHttp expects the client to acknowledge a peer-initiated close. During
         // a TriForce restart the server sends 1012; waiting only for onClosed can
         // leave the foreground executor attached to a dead socket indefinitely.
-        ws=null;connecting.set(false);
+        cancelHandshakeWatchdog();protocolConnected=false;ws=null;connecting.set(false);
         if(pairingCredentialRejected(code)){
             // Keep the rejected code visible. Never silently rotate a code the
             // user copied into an AI chat; only the explicit New Pair action may
@@ -127,6 +127,7 @@ final class ProtocolClient extends WebSocketListener {
         if(!stopped.get())scheduleReconnect("Server disconnected ("+code+")");
     }
     @Override public void onClosed(WebSocket socket,int code,String reason){
+        cancelHandshakeWatchdog();protocolConnected=false;
         if(pairingCredentialRejected(code)){
             ws=null;connecting.set(false);stopped.set(true);handoffCode="";
             listener.onState("Pair code invalid or expired · tap Generate new pair code");
@@ -134,7 +135,19 @@ final class ProtocolClient extends WebSocketListener {
         }
         if(socket!=ws)return;ws=null;connecting.set(false);if(!stopped.get())scheduleReconnect("Disconnected ("+code+")");
     }
-    @Override public void onFailure(WebSocket socket,Throwable t,Response response){if(socket!=ws)return;ws=null;connecting.set(false);String detail=t==null?"unknown":t.getClass().getSimpleName()+(t.getMessage()==null?"":" · "+t.getMessage());Log.w(TAG,"WebSocket failure: "+detail,t);if(!stopped.get())scheduleReconnect("Connection lost · "+detail);}
+    @Override public void onFailure(WebSocket socket,Throwable t,Response response){if(socket!=ws)return;cancelHandshakeWatchdog();protocolConnected=false;ws=null;connecting.set(false);String detail=t==null?"unknown":t.getClass().getSimpleName()+(t.getMessage()==null?"":" · "+t.getMessage());Log.w(TAG,"WebSocket failure: "+detail,t);if(!stopped.get())scheduleReconnect("Connection lost · "+detail);}
     private synchronized void cancelReconnect(){ScheduledFuture<?> f=reconnectFuture;if(f!=null)f.cancel(false);reconnectFuture=null;}
+    private synchronized void cancelHandshakeWatchdog(){ScheduledFuture<?> f=handshakeFuture;if(f!=null)f.cancel(false);handshakeFuture=null;}
+    private synchronized void startHandshakeWatchdog(WebSocket socket){
+        cancelHandshakeWatchdog();
+        handshakeFuture=timer.schedule(()->{
+            synchronized(ProtocolClient.this){handshakeFuture=null;}
+            if(stopped.get()||socket!=ws||protocolConnected)return;
+            listener.onState("Protocol handshake timed out · reconnecting");
+            try{socket.cancel();}catch(Exception ignored){}
+            if(socket==ws){ws=null;connecting.set(false);}
+            scheduleReconnect("Protocol handshake timeout");
+        },6,TimeUnit.SECONDS);
+    }
     private synchronized void scheduleReconnect(String message){if(stopped.get())return;connecting.set(false);ScheduledFuture<?> f=reconnectFuture;if(f!=null&&!f.isDone())return;listener.onState(message+" · reconnecting");long delay=Math.min(30,1L<<Math.min(5,reconnectAttempt++));reconnectFuture=timer.schedule(()->{synchronized(ProtocolClient.this){reconnectFuture=null;}connect();},delay,TimeUnit.SECONDS);}
 }

@@ -7,6 +7,9 @@ import android.graphics.Rect;
 import android.os.Bundle;
 import android.content.Intent;
 import android.os.Build;
+import android.os.PowerManager;
+import android.app.KeyguardManager;
+import android.content.Context;
 import android.view.accessibility.AccessibilityNodeInfo;
 import org.json.JSONObject;
 import org.json.JSONArray;
@@ -34,6 +37,9 @@ public final class DeviceControlService extends AccessibilityService {
             case "swipe":
                 service.swipe(args);
                 return new JSONObject().put("ok", true).put("action", action);
+            case "wake":
+            case "wake_screen":
+                return service.wakeScreen();
             case "type":
                 return service.typeText(args.optString("text", ""));
             case "invoke":
@@ -56,6 +62,39 @@ public final class DeviceControlService extends AccessibilityService {
         return new JSONObject().put("ok", true).put("action", label);
     }
 
+    private JSONObject wakeScreen() throws Exception {
+        JSONObject before = screenState(this);
+        if (!before.optBoolean("interactive", true)) {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm == null) throw new IllegalStateException("Android power service unavailable");
+            @SuppressWarnings("deprecation")
+            PowerManager.WakeLock lock = pm.newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP | PowerManager.ON_AFTER_RELEASE,
+                    "ailinux-helper:remote-wake");
+            lock.acquire(2000L);
+            try { Thread.sleep(180L); } finally { if (lock.isHeld()) lock.release(); }
+        }
+        JSONObject after = screenState(this);
+        return new JSONObject().put("ok", true).put("action", "wake")
+                .put("was_interactive", before.optBoolean("interactive", true))
+                .put("interactive", after.optBoolean("interactive", true))
+                .put("keyguard_locked", after.optBoolean("keyguard_locked", false));
+    }
+
+    static JSONObject ensureScreenInteractive() throws Exception {
+        DeviceControlService service = active;
+        if (service == null) throw new IllegalStateException("Android accessibility control service is not enabled");
+        return service.wakeScreen();
+    }
+
+    private static JSONObject screenState(Context context) throws Exception {
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        KeyguardManager km = (KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
+        boolean interactive = pm == null || pm.isInteractive();
+        boolean locked = km != null && km.isKeyguardLocked();
+        return new JSONObject().put("interactive", interactive).put("keyguard_locked", locked);
+    }
+
     private void gesture(JSONObject args, boolean ignored) throws Exception {
         float x = coordinate(args, "x", getResources().getDisplayMetrics().widthPixels);
         float y = coordinate(args, "y", getResources().getDisplayMetrics().heightPixels);
@@ -69,11 +108,17 @@ public final class DeviceControlService extends AccessibilityService {
     }
 
     private void swipe(JSONObject args) throws Exception {
-        float x1 = coordinate(args, "x", getResources().getDisplayMetrics().widthPixels);
-        float y1 = coordinate(args, "y", getResources().getDisplayMetrics().heightPixels);
+        float x1 = coordinateAlias(args, "x", "x1", getResources().getDisplayMetrics().widthPixels);
+        float y1 = coordinateAlias(args, "y", "y1", getResources().getDisplayMetrics().heightPixels);
         float x2 = coordinate(args, "x2", getResources().getDisplayMetrics().widthPixels);
         float y2 = coordinate(args, "y2", getResources().getDisplayMetrics().heightPixels);
         dispatchLine(x1, y1, x2, y2, boundedDuration(args.optLong("duration_ms", 350), 100, 3000));
+    }
+
+    private float coordinateAlias(JSONObject args, String primary, String alias, int maxExclusive) {
+        if (args.has(primary)) return coordinate(args, primary, maxExclusive);
+        if (args.has(alias)) return coordinate(args, alias, maxExclusive);
+        throw new IllegalArgumentException(primary + " (or " + alias + ") is required");
     }
 
     private float coordinate(JSONObject args, String name, int maxExclusive) {
@@ -173,6 +218,9 @@ public final class DeviceControlService extends AccessibilityService {
         DeviceControlService service = active;
         JSONObject out = new JSONObject().put("available", service != null).put("event_id", accessibilityEventId);
         if (service == null) return out;
+        JSONObject display = screenState(service);
+        out.put("interactive", display.optBoolean("interactive", true));
+        out.put("keyguard_locked", display.optBoolean("keyguard_locked", false));
         AccessibilityNodeInfo root = service.getRootInActiveWindow();
         if (root == null) return out.put("active_window", false);
         try {

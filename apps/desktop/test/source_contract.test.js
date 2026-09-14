@@ -342,9 +342,13 @@ test('android remote control is accessibility-gated and fail-closed', () => {
   assert.match(protocol, /\.put\("computer_input"\)/);
   assert.match(protocol, /case"computer_input"/);
   assert.match(state, /prefs\.getBoolean\("computer_control", false\)/);
-  for (const action of ['tap', 'long_press', 'swipe', 'type', 'back', 'home', 'recents', 'notifications']) {
+  for (const action of ['tap', 'long_press', 'swipe', 'wake', 'wake_screen', 'type', 'back', 'home', 'recents', 'notifications']) {
     assert.match(control, new RegExp('"' + action + '"'));
   }
+  assert.match(control, /coordinateAlias\(args, "x", "x1"/);
+  assert.match(control, /coordinateAlias\(args, "y", "y1"/);
+  assert.match(control, /put\("interactive", display\.optBoolean\("interactive", true\)\)/);
+  assert.match(control, /put\("keyguard_locked", display\.optBoolean\("keyguard_locked", false\)\)/);
   assert.doesNotMatch(control, /Runtime\.getRuntime|ProcessBuilder|Termux|\/bin\/sh/);
 });
 
@@ -400,4 +404,13 @@ test('android workspace credentials stay out of websocket URLs and device identi
   assert.match(stateStore, /String machineId\(\)/);
   assert.match(stateStore, /UUID\.randomUUID\(\)/);
   assert.match(stateStore, /putString\("machine_id", value\)/);
+});
+
+
+test('android executor retries a transport that never completes the protocol handshake', () => {
+  const protocol = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/ProtocolClient.java'), 'utf8');
+  assert.match(protocol, /startHandshakeWatchdog\(socket\)/);
+  assert.match(protocol, /Protocol handshake timed out · reconnecting/);
+  assert.match(protocol, /socket\.cancel\(\)/);
+  assert.match(protocol, /scheduleReconnect\("Protocol handshake timeout"\)/);
 });
