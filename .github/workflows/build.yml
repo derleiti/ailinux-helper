@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
     tags: ['v*']
-    paths: ['apps/**', 'features/**', 'assets/**', '.github/workflows/build.yml']
+    paths: ['apps/**', 'features/**', 'assets/**', 'release.json', 'scripts/generate-release-manifest.py', '.github/workflows/build.yml']
 
 permissions:
   contents: write

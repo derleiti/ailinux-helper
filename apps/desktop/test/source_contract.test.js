@@ -487,3 +487,27 @@ test('android workspace credentials use AndroidKeyStore AES-GCM and migrate with
   assert.doesNotMatch(store, /String resumeToken\(\) \{ return prefs\.getString\("resume_token"/);
   assert.match(store, /legacy plaintext is never returned as a fallback/);
 });
+
+test('WebMCP is externalized, self-hosted, and release-manifest pinned', () => {
+  const crypto = require('node:crypto');
+  const webRoot = path.join(__dirname, '../../web');
+  const html = fs.readFileSync(path.join(webRoot, 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(webRoot, 'app.js'), 'utf8');
+  const worker = fs.readFileSync(path.join(webRoot, 'pyodide-worker.js'), 'utf8');
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../release.json'), 'utf8'));
+  assert.doesNotMatch(html, /<style\b/i);
+  assert.doesNotMatch(html, /\sstyle=/i);
+  assert.match(html, /src="\/v1\/mcp\/web\/app\.js"/);
+  assert.match(html, /href="\/v1\/mcp\/web\/styles\.css"/);
+  assert.doesNotMatch(app, /cdn\.jsdelivr\.net/);
+  assert.doesNotMatch(worker, /cdn\.jsdelivr\.net/);
+  assert.match(worker, /\/v1\/mcp\/pyodide\/v314\.0\.6\//);
+  assert.equal(manifest.aliases.linux, 'linux-appimage');
+  assert.equal(manifest.webmcp.pyodide.version, 'v314.0.6');
+  assert.equal(manifest.webmcp.threat_model.cloudflare_beacon_allowed, false);
+  for (const [name, meta] of Object.entries(manifest.webmcp.pyodide.files)) {
+    const content = fs.readFileSync(path.join(webRoot, 'vendor', 'pyodide', 'v314.0.6', name));
+    assert.equal(crypto.createHash('sha256').update(content).digest('hex'), meta.sha256, name);
+  }
+  for (const meta of Object.values(manifest.artifacts)) assert.match(meta.sha256, /^[0-9a-f]{64}$/);
+});

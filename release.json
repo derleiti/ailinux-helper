@@ -1,0 +1,133 @@
+{
+  "aliases": {
+    "linux": "linux-appimage"
+  },
+  "artifacts": {
+    "android": {
+      "filename": "AILinux-Helper-2.90.29-android.apk",
+      "media_type": "application/vnd.android.package-archive",
+      "sha256": "ef52ba9f90d22c019b8ea5e720c23940504eadcd0f2dd53f0823627c61012051",
+      "size": 2193909
+    },
+    "android-arm64": {
+      "filename": "ailinux-helper-2.90.29-android-arm64",
+      "media_type": "application/octet-stream",
+      "sha256": "e379a52e1aadbb600dc10512ff7805f2f37cd0b51086e914373ee84538289ab3",
+      "size": 1769825
+    },
+    "arch": {
+      "filename": "ailinux-helper-capsule-2.90.29-1-x86_64.pkg.tar.zst",
+      "media_type": "application/zstd",
+      "sha256": "7c267735fb0edcc139aaee3f0ec74bea03a97844e64e047fca15a50b7b7f84ac",
+      "size": 707816
+    },
+    "freebsd": {
+      "filename": "ailinux-helper-2.90.29-freebsd-x86_64",
+      "media_type": "application/octet-stream",
+      "sha256": "457d585559a0b7941093279d1d6e0417d0f9c5cf45cea38dd00c894cdffa878a",
+      "size": 2793666
+    },
+    "ios": {
+      "filename": "ailinux-helper-2.90.29-ios-unsigned.ipa",
+      "media_type": "application/octet-stream",
+      "sha256": "cbb70aae4b9a340634e284a146744b077ff7da8af6cb683719bcd863571cbbf9",
+      "size": 992618
+    },
+    "ios-simulator": {
+      "filename": "ailinux-helper-2.90.29-ios-simulator.app.zip",
+      "media_type": "application/zip",
+      "sha256": "6dba9faa8b375c51cbf60e67417d7c94680a3d7edaee88f72f8940b54f2ab9e7",
+      "size": 993085
+    },
+    "linux-appimage": {
+      "filename": "AILinux-Helper-2.90.29-linux-x86_64.AppImage",
+      "media_type": "application/vnd.appimage",
+      "sha256": "5eddbcd674a05bf4018e10468bd8146f0c5773bd9a654d18b1faae3d9772f513",
+      "size": 124920925
+    },
+    "linux-binary": {
+      "filename": "ailinux-helper-2.90.29-linux-x86_64",
+      "media_type": "application/octet-stream",
+      "sha256": "56816508db6fed3ea0cd3b8ae3474f8f81cdccc841f6246693d540548fe3b10c",
+      "size": 2859192
+    },
+    "linux-deb": {
+      "filename": "AILinux-Helper-2.90.29-linux-amd64.deb",
+      "media_type": "application/vnd.debian.binary-package",
+      "sha256": "7167117cc044bca6fa60796b9564de88e3a10d867ca1c415b9a97ff1e86dbd2d",
+      "size": 98822144
+    },
+    "macos": {
+      "filename": "AILinux-Helper-2.90.29-mac-arm64.dmg",
+      "media_type": "application/x-apple-diskimage",
+      "sha256": "2cd30c695280f72430cc6a8b1244a6b845e0a0aed08f02e5f8c3460d66e33e41",
+      "size": 127505050
+    },
+    "macos-pkg": {
+      "filename": "ailinux-helper-2.90.29-macos.pkg",
+      "media_type": "application/vnd.apple.installer+xml",
+      "sha256": "678dd8c549d3bf5e5378a8f625f351ccc1fdaf4701f34991b5e6dafc2fd81ff8",
+      "size": 3581826
+    },
+    "macos-universal": {
+      "filename": "ailinux-helper-2.90.29-macos-universal",
+      "media_type": "application/octet-stream",
+      "sha256": "b22813f165e5b34fd6e8073f4c3bd76a193e7e62cdb9ed5527ed146b05d4cf67",
+      "size": 5717554
+    },
+    "openbsd": {
+      "filename": "ailinux-helper-2.90.29-openbsd-x86_64",
+      "media_type": "application/octet-stream",
+      "sha256": "e4c43ad9232bc5e3ed1d82f0337b73226af90a012203177573b3eb6075985b59",
+      "size": 2814264
+    },
+    "windows": {
+      "filename": "AILinux-Helper-2.90.29-win-x64.exe",
+      "media_type": "application/vnd.microsoft.portable-executable",
+      "sha256": "b39fa3af9939abe77736ddc361dd6965d558b3070ec3becfe720febca584c6ca",
+      "size": 111564777
+    },
+    "windows-capsule": {
+      "filename": "ailinux-helper-2.90.29-windows-x86_64.exe",
+      "media_type": "application/vnd.microsoft.portable-executable",
+      "sha256": "872ba7e8e5a0fab4d355162d0e8a33cb70c1a6f4fed1adc148972400051812ef",
+      "size": 2927616
+    }
+  },
+  "helper_version": "2.90.29",
+  "schema_version": 1,
+  "source_tag": "v2.90.29",
+  "webmcp": {
+    "pyodide": {
+      "base_path": "/v1/mcp/pyodide/v314.0.6/",
+      "files": {
+        "pyodide-lock.json": {
+          "sha256": "3fdaef09e9e365c85e002737720f8d0ab8f278c1c244a2dde6a37663cf488ad4",
+          "size": 114440
+        },
+        "pyodide.asm.wasm": {
+          "sha256": "3a0a00dfeaa348ac20f9ef09904233d32d33f644339662d4af368f8a2010f37a",
+          "size": 9598218
+        },
+        "pyodide.js": {
+          "sha256": "8d653521230f8e92f2e2f587e03f29d3abcdfb1c1744442d06fd8235007adb6b",
+          "size": 18912
+        },
+        "python_stdlib.zip": {
+          "sha256": "80c5be6babfe03297069703410c3c29404dcf2525d2b128746bae5536f94831f",
+          "size": 2545564
+        }
+      },
+      "version": "v314.0.6"
+    },
+    "script": "app.js",
+    "source_dir": "apps/web",
+    "stylesheet": "styles.css",
+    "threat_model": {
+      "cloudflare_beacon_allowed": false,
+      "electron_preload_privileged": true,
+      "third_party_scripts_allowed": false
+    },
+    "worker": "pyodide-worker.js"
+  }
+}
