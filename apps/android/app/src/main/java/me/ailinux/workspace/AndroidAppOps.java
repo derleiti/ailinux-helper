@@ -62,13 +62,9 @@ final class AndroidAppOps {
         PackageManager pm = context.getPackageManager();
         App match = findApp(pm, requested.trim());
         if (match == null) throw new IllegalArgumentException("launcher app not found: " + requested);
-        JSONObject result;
-        if (Build.VERSION.SDK_INT >= 31 && DeviceControlService.isReady()) {
-            // Modern Android deliberately restricts background activity launches.
-            // Use the user-enabled AccessibilityService's official All Apps system
-            // action, search by launcher label and click the visible result instead.
-            result = DeviceControlService.launchViaAllApps(match.label, match.packageName);
-        } else {
+        JSONObject result = null;
+        Exception directFailure = null;
+        try {
             Intent launch = pm.getLaunchIntentForPackage(match.packageName);
             if (launch == null) {
                 launch = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(match.packageName);
@@ -78,7 +74,29 @@ final class AndroidAppOps {
             }
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
             context.startActivity(launch);
-            result = new JSONObject().put("ok", true).put("method", "launcher_intent");
+            if (!DeviceControlService.isReady()) {
+                result = new JSONObject().put("ok", true).put("method", "launcher_intent").put("foreground_verified", false);
+            } else {
+                long deadline = System.currentTimeMillis() + 1800;
+                do {
+                    Thread.sleep(100);
+                    if (DeviceControlService.isForegroundPackage(match.packageName)) {
+                        result = new JSONObject().put("ok", true).put("method", "launcher_intent").put("foreground_verified", true);
+                        break;
+                    }
+                } while (System.currentTimeMillis() < deadline);
+            }
+        } catch (Exception e) {
+            directFailure = e;
+        }
+        if (result == null) {
+            if (Build.VERSION.SDK_INT >= 31 && DeviceControlService.isReady()) {
+                result = DeviceControlService.launchViaAllApps(match.label, match.packageName).put("direct_launch_failed", directFailure == null ? "foreground verification failed" : String.valueOf(directFailure.getMessage()));
+            } else if (directFailure != null) {
+                throw directFailure;
+            } else {
+                throw new IllegalStateException("app launch did not reach foreground: " + match.packageName);
+            }
         }
         return result.put("action", action).put("app", match.label).put("package", match.packageName);
     }
