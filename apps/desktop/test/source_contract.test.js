@@ -81,12 +81,14 @@ test('native helper IPC rejects untrusted renderer origins', () => {
   assert.match(source, /isTrustedDocument\(senderUrl\)/);
 });
 
-test('android helper discards expired pair credentials without deleting durable resume state', () => {
+test('android helper keeps rejected pair code visible and never silently rotates it', () => {
   const protocol = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
   const stateStore = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'StateStore.java'), 'utf8');
-  assert.match(protocol, /code==4003/);
-  assert.match(protocol, /workspace credential/);
-  assert.match(protocol, /state\.clearPairCode\(\)/);
+  assert.match(protocol, /pairingCredentialRejected\(int code\).*code==4003\|\|code==4403/s);
+  assert.match(protocol, /Pair code invalid or expired · tap Generate new pair code/);
+  const closing = protocol.match(/onClosing\(WebSocket socket,int code,String reason\)[\s\S]*?@Override public void onClosed/)?.[0] || '';
+  assert.doesNotMatch(closing, /clearPairCode/);
+  assert.doesNotMatch(closing, /createPairTicket/);
   assert.match(stateStore, /void clearPairCode\(\).*remove\("pair_code"\)/s);
   assert.doesNotMatch(stateStore.match(/void clearPairCode\(\).*?\}/s)?.[0] || '', /resume_token/);
 });
