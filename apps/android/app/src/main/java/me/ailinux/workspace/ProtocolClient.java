@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 final class ProtocolClient extends WebSocketListener {
     interface Listener { void onState(String state); void onResumeToken(String token); void onPairCode(String code); }
-    static final String VERSION="2.90.25-android";
+    static final String VERSION="2.90.26-android";
     static final String BASE="https://api.ailinux.me";
     private static final String TAG="AILinuxWorkspace";
     private final Context context; private final StateStore state; private final Listener listener;
@@ -91,7 +91,12 @@ final class ProtocolClient extends WebSocketListener {
         });
     }
     private static String enc(String value){try{return URLEncoder.encode(value,"UTF-8").replace("+","%20");}catch(Exception e){throw new IllegalArgumentException("URL encoding failed",e);}}
-    private void openSocket(String key,String code){String url="wss://api.ailinux.me/v1/mcp/node/connect?mode=workspace&"+key+"="+enc(code)+"&machine_id=android&client_version="+enc(VERSION);WebSocket previous=ws;WebSocket next=http.newWebSocket(new Request.Builder().url(url).build(),this);ws=next;if(previous!=null&&previous!=next)previous.cancel();}
+    private void openSocket(String key,String code){
+        String url="wss://api.ailinux.me/v1/mcp/node/connect?mode=workspace&client_version="+enc(VERSION);
+        Request.Builder request=new Request.Builder().url(url).header("X-AILinux-Machine-Id",state.machineId());
+        if("handoff_code".equals(key))request.header("X-AILinux-Handoff-Code",code);else request.header("X-AILinux-Pair-Code",code);
+        WebSocket previous=ws;WebSocket next=http.newWebSocket(request.build(),this);ws=next;if(previous!=null&&previous!=next)previous.cancel();
+    }
     @Override public void onOpen(WebSocket socket,Response response){if(socket!=ws){socket.cancel();return;}connecting.set(false);cancelReconnect();reconnectAttempt=0;listener.onState("Transport connected");}
     @Override public void onMessage(WebSocket socket,String text){try{JSONObject msg=new JSONObject(text);String error=msg.optString("error","");if(!error.isEmpty()){if(error.toLowerCase().contains("workspace credential")||error.toLowerCase().contains("pairing code")){connecting.set(false);stopped.set(true);handoffCode="";listener.onState("Pair code invalid or expired · tap Generate new pair code");try{socket.close(1000,"pairing credential rejected");}catch(Exception ignored){}}else listener.onState("Server error · "+error);return;}String method=msg.optString("method","");if("connected".equals(method)){sendHello(socket);return;}if("workspace/shared".equals(method)||"workspace/paired".equals(method)){JSONObject p=msg.optJSONObject("params");if(p!=null&&p.optBoolean("ok",true)){String token=p.optString("resume_token","");if(!token.isEmpty()){state.setResumeToken(token);state.setPairCode("");handoffCode="";listener.onPairCode("");listener.onResumeToken(token);}listener.onState("Workspace connected · "+state.mode());}return;}if("workspace/detached".equals(method)){listener.onState("AI detached · lease retained");return;}if("ping".equals(method)){socket.send(new JSONObject().put("jsonrpc","2.0").put("method","pong").put("params",msg.optJSONObject("params")==null?new JSONObject():msg.optJSONObject("params")).toString());return;}if("tools/call".equals(method)){tools.submit(()->handleToolCall(socket,msg));}}
         catch(Exception e){Log.e(TAG,"protocol message",e);listener.onState("Protocol error: "+e.getMessage());}}

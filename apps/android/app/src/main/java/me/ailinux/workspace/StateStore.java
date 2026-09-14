@@ -3,6 +3,7 @@ package me.ailinux.workspace;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import java.util.UUID;
 
 final class StateStore {
     private static final String PREFS = "workspace_state";
@@ -30,6 +31,13 @@ final class StateStore {
     void clearPairCode() { prefs.edit().remove("pair_code").apply(); }
     void setResumeToken(String token) { prefs.edit().putString("resume_token", token == null ? "" : token).apply(); }
     String resumeToken() { return prefs.getString("resume_token", ""); }
+    String machineId() {
+        String value = prefs.getString("machine_id", "");
+        if (value != null && !value.isEmpty()) return value;
+        value = "android-" + UUID.randomUUID().toString();
+        prefs.edit().putString("machine_id", value).commit();
+        return value;
+    }
     void setShellReleased(boolean released) { prefs.edit().putBoolean("shell_released", released).apply(); }
     boolean shellReleased() { return prefs.getBoolean("shell_released", false); }
     void setResourceAdvertise(boolean enabled) { prefs.edit().putBoolean("resource_advertise", enabled).apply(); }
