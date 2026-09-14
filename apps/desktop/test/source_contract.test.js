@@ -251,13 +251,16 @@ test('android vision and clipboard shares are explicit opt-in capabilities', () 
   const manifest = fs.readFileSync(path.join(root, 'AndroidManifest.xml'), 'utf8');
   const capture = fs.readFileSync(path.join(javaRoot, 'ScreenCapture.java'), 'utf8');
 
-  for (const cap of ['computer_observe', 'computer_screenshot', 'clipboard_read', 'clipboard_write']) {
+  for (const cap of ['computer_observe', 'computer_screenshot', 'vision_start', 'vision_status', 'vision_observe', 'vision_stop', 'clipboard_read', 'clipboard_write']) {
     assert.ok(protocol.includes(`out.put("${cap}")`) || protocol.includes(`.put("${cap}")`), `missing Android native capability: ${cap}`);
   }
   assert.match(protocol, /state\.screenObserve\(\).*screenCapture\.isReady\(\)/);
   assert.match(protocol, /state\.clipboardRead\(\)/);
   assert.match(protocol, /state\.clipboardWrite\(\)/);
-  assert.match(protocol, /case"computer_observe":case"computer_screenshot"/);
+  assert.match(protocol, /case"computer_observe"/);
+  assert.match(protocol, /case"computer_screenshot"/);
+  assert.match(protocol, /case"vision_observe"/);
+  assert.match(protocol, /screenCapture\.observe\(args\)/);
   assert.match(protocol, /case"clipboard_read"/);
   assert.match(protocol, /case"clipboard_write"/);
   assert.match(protocol, /new JSONObject\(\)\.put\("type","image"\).*put\("mimeType",mime\)/);
@@ -275,7 +278,11 @@ test('android vision and clipboard shares are explicit opt-in capabilities', () 
   assert.match(manifest, /specialUse\|mediaProjection/);
   assert.match(capture, /MediaProjectionManager/);
   assert.match(capture, /ImageReader\.newInstance/);
-  assert.match(capture, /Bitmap\.CompressFormat\.PNG/);
+  assert.match(capture, /Bitmap\.CompressFormat\.JPEG/);
+  assert.match(capture, /DEFAULT_IDLE_FPS = 2\.0/);
+  assert.match(capture, /DEFAULT_ACTIVE_FPS = 10\.0/);
+  assert.match(capture, /frameId/);
+  assert.match(capture, /sceneId/);
   assert.match(capture, /Base64\.NO_WRAP/);
 });
 
@@ -341,4 +348,16 @@ test('android remote control is accessibility-gated and fail-closed', () => {
 test('android display control grant mirrors actual accessibility readiness', () => {
   const protocol = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/ProtocolClient.java'), 'utf8');
   assert.match(protocol, /put\("control",state\.computerControl\(\)&&DeviceControlService\.isReady\(\)\)/);
+});
+
+
+test('desktop live vision module is packaged and exposes adaptive cached frames', () => {
+  const pkg = fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8');
+  const live = fs.readFileSync(path.join(__dirname, '..', 'live_vision.js'), 'utf8');
+  assert.match(pkg, /live_vision\.js/);
+  assert.match(live, /class DesktopLiveVision/);
+  assert.match(live, /idleFps: 2/);
+  assert.match(live, /activeFps: 10/);
+  assert.match(live, /toJPEG/);
+  assert.match(live, /frameId/);
 });

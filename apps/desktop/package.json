@@ -1,6 +1,6 @@
 {
   "name": "@ailinux/helper-desktop",
-  "version": "2.90.16",
+  "version": "2.90.19",
   "private": true,
   "description": "AILinux Helper cross-platform device companion for Linux, Windows and macOS",
   "main": "main.js",
@@ -28,6 +28,7 @@
       "docker_runtime.js",
       "service_runtime.js",
       "portable_runtime.js",
+      "live_vision.js",
       "package.json",
       "design-tokens.json"
     ],

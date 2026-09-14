@@ -38,6 +38,8 @@ final class StateStore {
     boolean remoteCompute() { return prefs.getBoolean("remote_compute", false); }
     void setScreenObserve(boolean enabled) { screenObserveSession = enabled; }
     boolean screenObserve() { return screenObserveSession; }
+    void setScreenObserveWanted(boolean enabled) { prefs.edit().putBoolean("screen_observe_wanted", enabled).apply(); }
+    boolean screenObserveWanted() { return prefs.getBoolean("screen_observe_wanted", false); }
     void setClipboardRead(boolean enabled) { prefs.edit().putBoolean("clipboard_read", enabled).apply(); }
     boolean clipboardRead() { return prefs.getBoolean("clipboard_read", false); }
     void setClipboardWrite(boolean enabled) { prefs.edit().putBoolean("clipboard_write", enabled).apply(); }

@@ -8,6 +8,7 @@ const shellBackends = require('./shell_backends');
 const dockerRuntime = require('./docker_runtime');
 const serviceRuntime = require('./service_runtime');
 const portableRuntime = require('./portable_runtime');
+const { DesktopLiveVision } = require('./live_vision');
 
 const APP_NAME = 'AILinux Helper';
 const START_URL = 'https://api.ailinux.me/v1/mcp';
@@ -15,6 +16,7 @@ const ALLOWED_ORIGIN = new URL(START_URL).origin;
 const SESSION_PARTITION = 'persist:ailinux-workspace';
 const PROTOCOLS = ['ailinux-helper', 'ailinux-workspace'];
 const startHidden = process.argv.includes('--background');
+const loomUnified = process.argv.includes('--loom-unified') || process.env.AILINUX_LOOM_UNIFIED === '1';
 const PLATFORM_LABEL = process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux';
 let designTokens = {};
 try { designTokens = JSON.parse(fs.readFileSync(path.join(__dirname, 'design-tokens.json'), 'utf8')); } catch {}
@@ -29,6 +31,7 @@ let pendingDeepLink = null;
 let connectionState = 'Starting';
 let lastNotifiedState = '';
 let statusTimer = null;
+let liveVision = null;
 
 let deviceShare = {
   clipboardRead: false,
@@ -214,6 +217,7 @@ async function releaseHostShell() {
 }
 
 function registerHelperIpc() {
+  if (!liveVision) liveVision = new DesktopLiveVision({ desktopCapturer, screen });
   ipcMain.handle('ailinux-helper:get-capabilities', (event) => {
     assertTrustedIpc(event);
     return {
@@ -222,6 +226,10 @@ function registerHelperIpc() {
       clipboard_write: deviceShare.clipboardWrite,
       computer_screenshot: deviceShare.screenObserve,
       computer_observe: deviceShare.screenObserve,
+      vision_start: deviceShare.screenObserve,
+      vision_status: deviceShare.screenObserve,
+      vision_observe: deviceShare.screenObserve,
+      vision_stop: deviceShare.screenObserve,
       device_info: deviceShare.resourceAdvertise || deviceShare.systemObserve,
       process_ops: (deviceShare.systemObserve || deviceShare.systemControl) && portableRuntime.capabilities().process,
       service_ops: (deviceShare.systemObserve || deviceShare.systemControl) && portableRuntime.capabilities().services,
@@ -339,7 +347,9 @@ function registerHelperIpc() {
     const payload = args && typeof args === 'object' ? args : {};
     const action = String(payload.action || 'list');
     if (action !== 'list' && !(await confirmPrivilegedAction(action + ' application ' + String(payload.app || ''), 'A local desktop application will be controlled.'))) return { ok: false, error: 'cancelled by user' };
-    return portableRuntime.appOps(payload);
+    const result = await portableRuntime.appOps(payload);
+    if (action !== 'list') liveVision?.noteInteraction();
+    return result;
   });
   ipcMain.handle('ailinux-helper:window-ops', async (event, args) => {
     assertTrustedIpc(event);
@@ -347,35 +357,39 @@ function registerHelperIpc() {
     const payload = args && typeof args === 'object' ? args : {};
     const action = String(payload.action || 'list');
     if (action !== 'list' && !(await confirmPrivilegedAction(action + ' desktop window', 'The AI will control a visible desktop window.'))) return { ok: false, error: 'cancelled by user' };
-    return portableRuntime.windowOps(payload);
+    const result = await portableRuntime.windowOps(payload);
+    if (action !== 'list') liveVision?.noteInteraction();
+    return result;
   });
   ipcMain.handle('ailinux-helper:computer-input', async (event, args) => {
     assertTrustedIpc(event);
     if (!deviceShare.computerControl) throw new Error('computer control is not shared');
     if (!(await confirmPrivilegedAction('send keyboard or pointer input', 'The AI will interact with the local desktop.'))) return { ok: false, error: 'cancelled by user' };
-    return portableRuntime.computerInput(args && typeof args === 'object' ? args : {});
+    const result = await portableRuntime.computerInput(args && typeof args === 'object' ? args : {});
+    liveVision?.noteInteraction();
+    return result;
+  });
+  ipcMain.handle('ailinux-helper:vision-start', async (event, args) => {
+    assertTrustedIpc(event); if (!deviceShare.screenObserve) throw new Error('screen observation is not shared');
+    return liveVision.start(args && typeof args === 'object' ? args : {});
+  });
+  ipcMain.handle('ailinux-helper:vision-status', (event) => {
+    assertTrustedIpc(event); if (!deviceShare.screenObserve) throw new Error('screen observation is not shared');
+    return liveVision.status();
+  });
+  ipcMain.handle('ailinux-helper:vision-observe', async (event, args) => {
+    assertTrustedIpc(event); if (!deviceShare.screenObserve) throw new Error('screen observation is not shared');
+    if (!liveVision.active) await liveVision.start({});
+    return liveVision.observe(args && typeof args === 'object' ? args : {});
+  });
+  ipcMain.handle('ailinux-helper:vision-stop', (event) => {
+    assertTrustedIpc(event); if (!deviceShare.screenObserve) throw new Error('screen observation is not shared');
+    return liveVision.stop();
   });
   ipcMain.handle('ailinux-helper:screenshot', async (event) => {
-    assertTrustedIpc(event);
-    if (!deviceShare.screenObserve) throw new Error('screen observation is not shared');
-    const primary = screen.getPrimaryDisplay();
-    const size = primary?.size || { width: 1920, height: 1080 };
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width: Math.max(1, size.width), height: Math.max(1, size.height) },
-      fetchWindowIcons: false,
-    });
-    if (!sources.length) throw new Error('no screen capture source available');
-    const preferred = sources.find((source) => String(source.display_id || '') === String(primary?.id || '')) || sources[0];
-    const image = preferred.thumbnail;
-    const actual = image.getSize();
-    return {
-      mime: 'image/png',
-      data_url: image.toDataURL(),
-      width: actual.width,
-      height: actual.height,
-      source: 'primary-screen',
-    };
+    assertTrustedIpc(event); if (!deviceShare.screenObserve) throw new Error('screen observation is not shared');
+    if (!liveVision.active) await liveVision.start({});
+    return liveVision.screenshot();
   });
   ipcMain.handle('ailinux:shell-status', (event) => {
     assertTrustedIpc(event);
@@ -657,7 +671,7 @@ if (!gotLock) {
     registerHelperIpc();
     powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
     createWindow();
-    createTray();
+    if (!loomUnified) createTray();
   });
 
   app.on('window-all-closed', (event) => {

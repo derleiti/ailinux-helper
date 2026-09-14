@@ -43,6 +43,7 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
         if(ACTION_STOP.equals(action)){
             if(client!=null)client.stop(true);
             if(screenCapture!=null)screenCapture.stop();
+            state.setScreenObserveWanted(false);
             state.setScreenObserve(false);
             releaseWakeLock();
             stopForeground(STOP_FOREGROUND_REMOVE);
@@ -123,6 +124,20 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
     }
     private void releaseWakeLock(){if(wakeLock!=null&&wakeLock.isHeld()){try{wakeLock.release();}catch(Exception ignored){}}wakeLock=null;}
 
-    private Notification notification(String text){Intent open=new Intent(this,MainActivity.class);PendingIntent pi=PendingIntent.getActivity(this,0,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);Intent reconnect=new Intent(this,WorkspaceService.class).setAction(ACTION_RECONNECT);PendingIntent ri=PendingIntent.getService(this,2,reconnect,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);Intent stop=new Intent(this,WorkspaceService.class).setAction(ACTION_STOP);PendingIntent si=PendingIntent.getService(this,1,stop,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);return new NotificationCompat.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.stat_sys_upload_done).setContentTitle("AILinux Helper · Workspace").setContentText(text).setStyle(new NotificationCompat.BigTextStyle().bigText(text)).setCategory(NotificationCompat.CATEGORY_SERVICE).setOnlyAlertOnce(true).setOngoing(true).setContentIntent(pi).addAction(0,"Open",pi).addAction(0,"Reconnect",ri).addAction(0,"Disconnect",si).build();}
+    private Notification notification(String text){
+        Intent open=new Intent(this,MainActivity.class);
+        PendingIntent pi=PendingIntent.getActivity(this,0,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Intent reconnect=new Intent(this,WorkspaceService.class).setAction(ACTION_RECONNECT);
+        PendingIntent ri=PendingIntent.getService(this,2,reconnect,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Intent stop=new Intent(this,WorkspaceService.class).setAction(ACTION_STOP);
+        PendingIntent si=PendingIntent.getService(this,1,stop,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        NotificationCompat.Builder builder=new NotificationCompat.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.stat_sys_upload_done).setContentTitle("AILinux Helper · Workspace").setContentText(text).setStyle(new NotificationCompat.BigTextStyle().bigText(text)).setCategory(NotificationCompat.CATEGORY_SERVICE).setOnlyAlertOnce(true).setOngoing(true).setContentIntent(pi).addAction(0,"Open",pi).addAction(0,"Reconnect",ri);
+        if(state!=null&&state.screenObserveWanted()&&(screenCapture==null||!screenCapture.isReady())){
+            Intent restore=new Intent(this,MainActivity.class).putExtra(MainActivity.EXTRA_REAUTHORIZE_SCREEN,true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            PendingIntent vi=PendingIntent.getActivity(this,3,restore,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+            builder.addAction(0,"Restore vision",vi);
+        }
+        return builder.addAction(0,"Disconnect",si).build();
+    }
     private void createChannel(){if(Build.VERSION.SDK_INT>=26){NotificationChannel c=new NotificationChannel(CHANNEL,"AILinux Helper Executor",NotificationManager.IMPORTANCE_LOW);c.setDescription("Persistent local MCP workspace connection");getSystemService(NotificationManager.class).createNotificationChannel(c);}}
 }
