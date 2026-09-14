@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Allows explicitly approved AILinux Helper sessions to use bounded tap, swipe, text, and navigation actions.</string>
+</resources>

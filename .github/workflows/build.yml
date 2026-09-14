@@ -27,7 +27,7 @@ jobs:
               --verify-tag \
               --prerelease \
               --title "AILinux Helper ${GITHUB_REF_NAME#v}" \
-              --notes "AILinux Helper ${GITHUB_REF_NAME#v}: live Android share rebinding, native resource advertisement, remote-compute preference, device-local Termux hardening, and typed desktop service control."
+              --notes "AILinux Helper ${GITHUB_REF_NAME#v}: global native vision/control, Android Accessibility input, typed desktop control, resilient workspace sharing, and isolated remote compute."
       - name: Branch build only
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: echo "No release upload for branch build."

@@ -320,3 +320,25 @@ test('android helper reconnects on server initiated websocket close', () => {
   assert.match(source, /scheduleReconnect\(\"Server disconnected \(\"\+code\+\"\)\"\)/);
   assert.match(source, /socket\.close\(code,reason\)/);
 });
+
+test('android remote control is accessibility-gated and fail-closed', () => {
+  const root = path.join(__dirname, '../../android/app/src/main');
+  const manifest = fs.readFileSync(path.join(root, 'AndroidManifest.xml'), 'utf8');
+  const protocol = fs.readFileSync(path.join(root, 'java/me/ailinux/workspace/ProtocolClient.java'), 'utf8');
+  const state = fs.readFileSync(path.join(root, 'java/me/ailinux/workspace/StateStore.java'), 'utf8');
+  const control = fs.readFileSync(path.join(root, 'java/me/ailinux/workspace/DeviceControlService.java'), 'utf8');
+  assert.match(manifest, /\.DeviceControlService/);
+  assert.match(manifest, /android\.permission\.BIND_ACCESSIBILITY_SERVICE/);
+  assert.match(protocol, /state\.computerControl\(\)&&DeviceControlService\.isReady\(\)\)out\.put\("computer_input"\)/);
+  assert.match(protocol, /case"computer_input"/);
+  assert.match(state, /prefs\.getBoolean\("computer_control", false\)/);
+  for (const action of ['tap', 'long_press', 'swipe', 'type', 'back', 'home', 'recents', 'notifications']) {
+    assert.match(control, new RegExp('"' + action + '"'));
+  }
+  assert.doesNotMatch(control, /Runtime\.getRuntime|ProcessBuilder|Termux|\/bin\/sh/);
+});
+
+test('android display control grant mirrors actual accessibility readiness', () => {
+  const protocol = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/ProtocolClient.java'), 'utf8');
+  assert.match(protocol, /put\("control",state\.computerControl\(\)&&DeviceControlService\.isReady\(\)\)/);
+});
