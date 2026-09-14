@@ -336,7 +336,8 @@ test('android remote control is accessibility-gated and fail-closed', () => {
   const control = fs.readFileSync(path.join(root, 'java/me/ailinux/workspace/DeviceControlService.java'), 'utf8');
   assert.match(manifest, /\.DeviceControlService/);
   assert.match(manifest, /android\.permission\.BIND_ACCESSIBILITY_SERVICE/);
-  assert.match(protocol, /state\.computerControl\(\)&&DeviceControlService\.isReady\(\)\)out\.put\("computer_input"\)/);
+  assert.match(protocol, /state\.computerControl\(\)&&DeviceControlService\.isReady\(\)/);
+  assert.match(protocol, /\.put\("computer_input"\)/);
   assert.match(protocol, /case"computer_input"/);
   assert.match(state, /prefs\.getBoolean\("computer_control", false\)/);
   for (const action of ['tap', 'long_press', 'swipe', 'type', 'back', 'home', 'recents', 'notifications']) {
@@ -351,13 +352,31 @@ test('android display control grant mirrors actual accessibility readiness', () 
 });
 
 
-test('desktop live vision module is packaged and exposes adaptive cached frames', () => {
+test('desktop live vision keeps one display-media stream instead of reopening the Wayland portal per frame', () => {
   const pkg = fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8');
   const live = fs.readFileSync(path.join(__dirname, '..', 'live_vision.js'), 'utf8');
   assert.match(pkg, /live_vision\.js/);
   assert.match(live, /class DesktopLiveVision/);
   assert.match(live, /idleFps: 2/);
   assert.match(live, /activeFps: 10/);
-  assert.match(live, /toJPEG/);
+  assert.match(live, /getDisplayMedia/);
+  assert.match(live, /setDisplayMediaRequestHandler/);
+  assert.match(live, /useSystemPicker:\s*true/);
+  assert.match(live, /window\.__ailinuxStream/);
+  assert.match(live, /toDataURL\('image\/jpeg'/);
+  assert.match(live, /this\.active = false;[\s\S]*capture_error/);
   assert.match(live, /frameId/);
+});
+
+test('desktop Wayland control ships an XDG RemoteDesktop portal adapter and advertises computer_input when available', () => {
+  const pkg = fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8');
+  const runtime = fs.readFileSync(path.join(__dirname, '..', 'portable_runtime.js'), 'utf8');
+  const portal = fs.readFileSync(path.join(__dirname, '..', 'linux_portal_input.py'), 'utf8');
+  assert.match(pkg, /linux_portal_input\.py/);
+  assert.match(runtime, /xdg-remote-desktop-portal/);
+  assert.match(runtime, /portalComputerInput/);
+  assert.match(portal, /org\.freedesktop\.portal\.RemoteDesktop/);
+  assert.match(portal, /NotifyPointerMotion/);
+  assert.match(portal, /NotifyPointerButton/);
+  assert.match(portal, /NotifyKeyboardKeysym/);
 });

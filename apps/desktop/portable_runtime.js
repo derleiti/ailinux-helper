@@ -4,7 +4,7 @@
  * No operation falls back to an unrestricted shell. Mutating calls are expected
  * to be confirmed by main.js before reaching this module.
  */
-const { execFile, spawn } = require('node:child_process');
+const { execFile, execFileSync, spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -46,7 +46,116 @@ function run(file, args = [], options = {}) {
 }
 
 function powershell() { return which('pwsh', 'powershell'); }
-function linuxInputAdapter() { return which('xdotool') ? 'xdotool' : ''; }
+
+function systemPython() {
+  for (const candidate of ['/usr/bin/python3', '/bin/python3']) {
+    try { fs.accessSync(candidate, fs.constants.X_OK); return candidate; } catch {}
+  }
+  return which('python3');
+}
+
+function portalBridgePath() {
+  const packaged = process.resourcesPath ? path.join(process.resourcesPath, 'linux_portal_input.py') : '';
+  if (packaged && fs.existsSync(packaged)) return packaged;
+  return path.join(__dirname, 'linux_portal_input.py');
+}
+
+
+let portalProbe = null;
+let portalChild = null;
+let portalSeq = 0;
+let portalBuffer = '';
+const portalPending = new Map();
+
+function linuxWaylandSession() {
+  return process.platform === 'linux' && Boolean(
+    process.env.WAYLAND_DISPLAY ||
+    String(process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' ||
+    process.argv.some((arg) => String(arg).includes('ozone-platform=wayland'))
+  );
+}
+
+function portalInputAvailable() {
+  if (process.platform !== 'linux') return false;
+  if (portalProbe !== null) return portalProbe;
+  const python = systemPython();
+  const bridge = portalBridgePath();
+  if (!python || !fs.existsSync(bridge)) return (portalProbe = false);
+  try {
+    execFileSync(python, ['-c', 'import dbus,gi; b=dbus.SessionBus(); o=b.get_object("org.freedesktop.portal.Desktop","/org/freedesktop/portal/desktop"); p=dbus.Interface(o,"org.freedesktop.DBus.Properties"); assert int(p.Get("org.freedesktop.portal.RemoteDesktop","AvailableDeviceTypes")) & 3'], { timeout: 3000, stdio: 'ignore', env: process.env });
+    portalProbe = true;
+  } catch {
+    portalProbe = false;
+  }
+  return portalProbe;
+}
+
+function linuxInputAdapter() {
+  if (!linuxWaylandSession() && which('xdotool')) return 'xdotool';
+  if (portalInputAvailable()) return 'xdg-remote-desktop-portal';
+  return which('xdotool') ? 'xdotool' : '';
+}
+
+function rejectPortalPending(error) {
+  for (const { reject, timer } of portalPending.values()) { clearTimeout(timer); reject(error); }
+  portalPending.clear();
+}
+
+function ensurePortalChild() {
+  if (portalChild && !portalChild.killed) return portalChild;
+  const python = systemPython();
+  if (!python || !portalInputAvailable()) throw new Error('XDG RemoteDesktop input bridge unavailable');
+  const child = spawn(python, [portalBridgePath()], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: process.env,
+  });
+  portalChild = child;
+  portalBuffer = '';
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    portalBuffer += chunk;
+    while (portalBuffer.includes('\n')) {
+      const idx = portalBuffer.indexOf('\n');
+      const line = portalBuffer.slice(0, idx).trim();
+      portalBuffer = portalBuffer.slice(idx + 1);
+      if (!line) continue;
+      let msg; try { msg = JSON.parse(line); } catch { continue; }
+      if (msg.id === undefined || msg.id === null) continue;
+      const pending = portalPending.get(String(msg.id));
+      if (!pending) continue;
+      portalPending.delete(String(msg.id));
+      clearTimeout(pending.timer);
+      if (msg.error) pending.reject(new Error(String(msg.error)));
+      else pending.resolve(msg.result || msg);
+    }
+  });
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', () => {});
+  child.on('exit', (code, signal) => {
+    if (portalChild === child) portalChild = null;
+    rejectPortalPending(new Error(`XDG RemoteDesktop bridge exited (${code ?? signal ?? 'unknown'})`));
+  });
+  child.on('error', (error) => {
+    if (portalChild === child) portalChild = null;
+    rejectPortalPending(error);
+  });
+  return child;
+}
+
+function portalComputerInput(args = {}) {
+  const child = ensurePortalChild();
+  const id = String(++portalSeq);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      portalPending.delete(id);
+      reject(new Error('XDG RemoteDesktop input request timed out'));
+    }, 130000);
+    portalPending.set(id, { resolve, reject, timer });
+    try { child.stdin.write(JSON.stringify({ id, args }) + '\n'); }
+    catch (error) { clearTimeout(timer); portalPending.delete(id); reject(error); }
+  });
+}
+
 function windowAdapter() {
   if (process.platform === 'darwin') return which('osascript') ? 'osascript' : '';
   if (process.platform === 'win32') return powershell() ? 'powershell' : '';
@@ -249,7 +358,8 @@ async function computerInput(args = {}) {
   const action = String(args.action || '').toLowerCase();
   if (!['click', 'double_click', 'move', 'scroll', 'type', 'key'].includes(action)) throw new Error('unsupported input action');
   if (process.platform === 'linux') {
-    const xdotool = which('xdotool'); if (!xdotool) throw new Error('computer input unavailable: install/enable a compatible xdotool adapter for this session');
+    if (linuxInputAdapter() === 'xdg-remote-desktop-portal') return portalComputerInput(args);
+    const xdotool = which('xdotool'); if (!xdotool) throw new Error('computer input unavailable: no XDG RemoteDesktop portal or xdotool adapter is available');
     const x = Math.trunc(Number(args.x || 0)), y = Math.trunc(Number(args.y || 0));
     if (action === 'move') return run(xdotool, ['mousemove', String(x), String(y)]);
     if (action === 'click' || action === 'double_click') {
@@ -288,4 +398,4 @@ async function computerInput(args = {}) {
   return run(ps, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script, String(x), String(y), action, String(Math.trunc(Number(args.delta_y || 0)))]);
 }
 
-module.exports = { which, run, capabilities, processOps, serviceOps, appOps, windowOps, computerInput, windowAdapter, inputAdapter };
+module.exports = { which, run, capabilities, processOps, serviceOps, appOps, windowOps, computerInput, windowAdapter, inputAdapter, linuxWaylandSession, portalInputAvailable };
