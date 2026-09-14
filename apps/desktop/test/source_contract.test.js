@@ -512,3 +512,16 @@ test('WebMCP is externalized, self-hosted, and release-manifest pinned', () => {
   }
   for (const meta of Object.values(manifest.artifacts)) assert.match(meta.sha256, /^[0-9a-f]{64}$/);
 });
+
+test('workspace handoff landing is externalized for strict MCP CSP', () => {
+  const webRoot = path.join(__dirname, '../../web');
+  const html = fs.readFileSync(path.join(webRoot, 'handoff.html'), 'utf8');
+  const js = fs.readFileSync(path.join(webRoot, 'handoff.js'), 'utf8');
+  assert.doesNotMatch(html, /<style\b/i);
+  assert.doesNotMatch(html, /<script(?![^>]*src=)/i);
+  assert.doesNotMatch(html, /\sstyle=/i);
+  assert.match(html, /\/v1\/mcp\/web\/handoff\.css/);
+  assert.match(html, /\/v1\/mcp\/web\/handoff\.js/);
+  assert.match(js, /location\.hash/);
+  assert.match(js, /ailinux-helper:\/\/handoff\?code=/);
+});
