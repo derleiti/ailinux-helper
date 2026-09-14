@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld('ailinuxHelper', Object.freeze({
   clipboardRead: () => ipcRenderer.invoke('ailinux-helper:clipboard-read'),
   clipboardWrite: (text) => ipcRenderer.invoke('ailinux-helper:clipboard-write', String(text ?? '')),
   screenshot: () => ipcRenderer.invoke('ailinux-helper:screenshot'),
+  deviceInfo: () => ipcRenderer.invoke('ailinux-helper:device-info'),
+  processOps: (args) => ipcRenderer.invoke('ailinux-helper:process-ops', args || {}),
+  serviceOps: (args) => ipcRenderer.invoke('ailinux-helper:service-ops', args || {}),
+  appOps: (args) => ipcRenderer.invoke('ailinux-helper:app-ops', args || {}),
+  windowOps: (args) => ipcRenderer.invoke('ailinux-helper:window-ops', args || {}),
+  computerInput: (args) => ipcRenderer.invoke('ailinux-helper:computer-input', args || {}),
 }));
 
 

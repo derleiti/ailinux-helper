@@ -7,6 +7,7 @@ const os = require('os');
 const shellBackends = require('./shell_backends');
 const dockerRuntime = require('./docker_runtime');
 const serviceRuntime = require('./service_runtime');
+const portableRuntime = require('./portable_runtime');
 
 const APP_NAME = 'AILinux Helper';
 const START_URL = 'https://api.ailinux.me/v1/mcp';
@@ -33,6 +34,9 @@ let deviceShare = {
   clipboardRead: false,
   clipboardWrite: false,
   screenObserve: false,
+  systemObserve: false,
+  systemControl: false,
+  computerControl: false,
   resourceAdvertise: false,
   computeAdvertise: false,
   mcpAdvertise: false,
@@ -49,6 +53,9 @@ function loadDeviceShare() {
       clipboardRead: raw.clipboardRead === true,
       clipboardWrite: raw.clipboardWrite === true,
       screenObserve: raw.screenObserve === true,
+      systemObserve: raw.systemObserve === true || raw.systemInspect === true,
+      systemControl: raw.systemControl === true,
+      computerControl: raw.computerControl === true,
       resourceAdvertise: raw.resourceAdvertise === true,
       computeAdvertise: raw.computeAdvertise === true,
       mcpAdvertise: raw.mcpAdvertise === true,
@@ -110,7 +117,8 @@ function publicShareProfile() {
     visibility: 'private',
     workspace: { enabled: true, mode: 'selected-in-webapp' },
     clipboard: { read: deviceShare.clipboardRead, write: deviceShare.clipboardWrite },
-    display: { observe: deviceShare.screenObserve, control: false },
+    display: { observe: deviceShare.screenObserve, control: deviceShare.computerControl },
+    device: { observe: deviceShare.systemObserve, control: deviceShare.systemControl, adapters: portableRuntime.capabilities() },
     resources: { advertise: deviceShare.resourceAdvertise },
     compute: { advertise: deviceShare.computeAdvertise && dockerReleased, ...computeResourceDescriptor(docker[0] === true && !engineDown, dockerReleased), engine: engineState ? engineState.engine : 'unknown', released: dockerReleased, workspaceMode: shellState.workspaceMode || 'read_only', detail: dockerReleased ? shellState.workspace : (engineDown ? engineState.detail : docker[1]) },
     mcp: { advertise: deviceShare.mcpAdvertise },
@@ -135,7 +143,7 @@ async function publicResourceInventory() {
 }
 
 function updateDeviceShare(patch = {}) {
-  const allowed = ['clipboardRead', 'clipboardWrite', 'screenObserve', 'resourceAdvertise', 'computeAdvertise', 'mcpAdvertise'];
+  const allowed = ['clipboardRead', 'clipboardWrite', 'screenObserve', 'systemObserve', 'systemControl', 'computerControl', 'resourceAdvertise', 'computeAdvertise', 'mcpAdvertise'];
   for (const key of allowed) if (Object.prototype.hasOwnProperty.call(patch, key)) deviceShare[key] = patch[key] === true;
   if (deviceShare.computeAdvertise && !shellBackends.backendAvailable('docker')[0]) deviceShare.computeAdvertise = false;
   saveDeviceShare();
@@ -214,6 +222,13 @@ function registerHelperIpc() {
       clipboard_write: deviceShare.clipboardWrite,
       computer_screenshot: deviceShare.screenObserve,
       computer_observe: deviceShare.screenObserve,
+      device_info: deviceShare.resourceAdvertise || deviceShare.systemObserve,
+      process_ops: (deviceShare.systemObserve || deviceShare.systemControl) && portableRuntime.capabilities().process,
+      service_ops: (deviceShare.systemObserve || deviceShare.systemControl) && portableRuntime.capabilities().services,
+      app_ops: deviceShare.systemControl && portableRuntime.capabilities().apps,
+      device_control: deviceShare.systemControl,
+      window_ops: deviceShare.computerControl && portableRuntime.capabilities().windows,
+      computer_input: deviceShare.computerControl && portableRuntime.capabilities().input,
       computer_click: false,
       computer_type: false,
       compute_execute: publicShareProfile().compute.advertise,
@@ -294,6 +309,52 @@ function registerHelperIpc() {
     clipboard.writeText(value);
     return { ok: true, bytes: Buffer.byteLength(value, 'utf8') };
   });
+  ipcMain.handle('ailinux-helper:device-info', async (event) => {
+    assertTrustedIpc(event);
+    if (!deviceShare.resourceAdvertise && !deviceShare.systemObserve) throw new Error('device inspection is not shared');
+    return { ...(await publicResourceInventory()), adapters: portableRuntime.capabilities(), hostname: os.hostname() };
+  });
+  ipcMain.handle('ailinux-helper:process-ops', async (event, args) => {
+    assertTrustedIpc(event);
+    const payload = args && typeof args === 'object' ? args : {};
+    const mutating = String(payload.action || 'list') === 'signal';
+    if (mutating && !deviceShare.systemControl) throw new Error('system control is not shared');
+    if (!mutating && !deviceShare.systemObserve && !deviceShare.systemControl) throw new Error('system inspection is not shared');
+    if (mutating && !(await confirmPrivilegedAction('control process ' + String(payload.pid || ''), 'A local process will receive a signal.'))) return { ok: false, error: 'cancelled by user' };
+    return portableRuntime.processOps(payload);
+  });
+  ipcMain.handle('ailinux-helper:service-ops', async (event, args) => {
+    assertTrustedIpc(event);
+    const payload = args && typeof args === 'object' ? args : {};
+    const action = String(payload.action || 'list');
+    const mutating = ['start', 'stop', 'restart'].includes(action);
+    if (mutating && !deviceShare.systemControl) throw new Error('system control is not shared');
+    if (!mutating && !deviceShare.systemObserve && !deviceShare.systemControl) throw new Error('system inspection is not shared');
+    if (mutating && !(await confirmPrivilegedAction(action + ' service ' + String(payload.service || ''), 'A local operating-system service will be changed.'))) return { ok: false, error: 'cancelled by user' };
+    return portableRuntime.serviceOps(payload);
+  });
+  ipcMain.handle('ailinux-helper:app-ops', async (event, args) => {
+    assertTrustedIpc(event);
+    if (!deviceShare.systemControl) throw new Error('application control is not shared');
+    const payload = args && typeof args === 'object' ? args : {};
+    const action = String(payload.action || 'list');
+    if (action !== 'list' && !(await confirmPrivilegedAction(action + ' application ' + String(payload.app || ''), 'A local desktop application will be controlled.'))) return { ok: false, error: 'cancelled by user' };
+    return portableRuntime.appOps(payload);
+  });
+  ipcMain.handle('ailinux-helper:window-ops', async (event, args) => {
+    assertTrustedIpc(event);
+    if (!deviceShare.computerControl) throw new Error('computer control is not shared');
+    const payload = args && typeof args === 'object' ? args : {};
+    const action = String(payload.action || 'list');
+    if (action !== 'list' && !(await confirmPrivilegedAction(action + ' desktop window', 'The AI will control a visible desktop window.'))) return { ok: false, error: 'cancelled by user' };
+    return portableRuntime.windowOps(payload);
+  });
+  ipcMain.handle('ailinux-helper:computer-input', async (event, args) => {
+    assertTrustedIpc(event);
+    if (!deviceShare.computerControl) throw new Error('computer control is not shared');
+    if (!(await confirmPrivilegedAction('send keyboard or pointer input', 'The AI will interact with the local desktop.'))) return { ok: false, error: 'cancelled by user' };
+    return portableRuntime.computerInput(args && typeof args === 'object' ? args : {});
+  });
   ipcMain.handle('ailinux-helper:screenshot', async (event) => {
     assertTrustedIpc(event);
     if (!deviceShare.screenObserve) throw new Error('screen observation is not shared');
@@ -365,12 +426,13 @@ function targetFromArgv(argv) {
       const deepLink = new URL(arg);
       const requested = deepLink.searchParams.get('url');
       const pairCode = deepLink.searchParams.get('pair_code') || deepLink.searchParams.get('code');
-      if (requested) return safeTarget(requested);
+      const baseTarget = requested ? safeTarget(requested) : START_URL;
       if (pairCode) {
-        const url = new URL(START_URL);
+        const url = new URL(baseTarget);
         url.searchParams.set('pair_code', pairCode.trim().toUpperCase());
         return url.toString();
       }
+      if (requested) return baseTarget;
     } catch {
       return START_URL;
     }
@@ -437,10 +499,12 @@ function rebuildTrayMenu() {
         { label: 'Share clipboard read', type: 'checkbox', checked: deviceShare.clipboardRead, click: (item) => updateDeviceShare({ clipboardRead: item.checked }) },
         { label: 'Share clipboard write', type: 'checkbox', checked: deviceShare.clipboardWrite, click: (item) => updateDeviceShare({ clipboardWrite: item.checked }) },
         { label: 'Share screen observation', type: 'checkbox', checked: deviceShare.screenObserve, click: (item) => updateDeviceShare({ screenObserve: item.checked }) },
+        { label: 'Share system observation', type: 'checkbox', checked: deviceShare.systemObserve, click: (item) => updateDeviceShare({ systemObserve: item.checked }) },
+        { label: 'Share system control', type: 'checkbox', checked: deviceShare.systemControl, click: (item) => updateDeviceShare({ systemControl: item.checked }) },
+        { label: 'Share mouse/keyboard control', type: 'checkbox', checked: deviceShare.computerControl, enabled: portableRuntime.capabilities().input, click: (item) => updateDeviceShare({ computerControl: item.checked }) },
         { label: 'Share CPU/RAM/GPU metadata', type: 'checkbox', checked: deviceShare.resourceAdvertise, click: (item) => updateDeviceShare({ resourceAdvertise: item.checked }) },
         { label: 'Advertise Docker compute', type: 'checkbox', checked: deviceShare.computeAdvertise, enabled: shellBackends.backendAvailable('docker')[0], click: (item) => updateDeviceShare({ computeAdvertise: item.checked }) },
         { label: 'Advertise local MCP bridge', type: 'checkbox', checked: deviceShare.mcpAdvertise, click: (item) => updateDeviceShare({ mcpAdvertise: item.checked }) },
-        { label: 'Mouse/keyboard control: unavailable', enabled: false },
       ],
     },
     { type: 'separator' },

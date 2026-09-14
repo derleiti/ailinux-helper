@@ -177,12 +177,17 @@ test('android share profile supports native-only resource advertisement and remo
   assert.match(protocol, /state\.resourceAdvertise\(\)/);
   assert.match(protocol, /resources\.put\("inventory",deviceResources\(\)\)/);
   assert.match(protocol, /remote_requested/);
+  assert.match(protocol, /if\(state\.remoteCompute\(\)\)out\.put\("compute_execute"\)/);
+  assert.match(protocol, /put\("runtime","triforce_docker"\)/);
+  assert.match(protocol, /put\("internet","public_only"\)/);
+  assert.match(protocol, /put\("workspace_path","~\/workspace"\)/);
+  assert.match(activity, /Request isolated TriForce Docker sandbox/);
   assert.match(protocol, /state\.tree\(\)==null\?"off":state\.mode\(\)/);
   assert.match(stateStore, /resource_advertise/);
   assert.match(stateStore, /remote_compute/);
   assert.match(stateStore, /visibility/);
   assert.match(activity, /Advertise device CPU \/ RAM metadata/);
-  assert.match(activity, /Prefer remote cluster compute/);
+  assert.match(activity, /Request isolated TriForce Docker sandbox/);
 });
 
 test('desktop package explicitly ships the shell backend module', () => {
