@@ -99,9 +99,12 @@ async function processOps(args = {}) {
     catch (error) { return { ok: false, pid, signal: sig, error: String(error.message || error) }; }
   }
   const ps = which('ps'); if (!ps) throw new Error('ps unavailable');
+  const listArgs = process.platform === 'darwin'
+    ? ['-axo', 'pid=,ppid=,user=,%cpu=,%mem=,stat=,comm=,args=']
+    : ['-eo', 'pid=,ppid=,user=,pcpu=,pmem=,stat=,comm=,args=', '--sort=-pcpu'];
   const result = await run(ps, action === 'get'
     ? ['-p', String(pid), '-o', 'pid=,ppid=,user=,pcpu=,pmem=,stat=,comm=,args=']
-    : ['-eo', 'pid=,ppid=,user=,pcpu=,pmem=,stat=,comm=,args=', '--sort=-pcpu']);
+    : listArgs);
   if (action === 'list' && result.ok) {
     const q = cleanQuery(args.query), limit = parseLimit(args.limit);
     let lines = result.stdout.split(/\r?\n/).filter(Boolean);
