@@ -2,6 +2,7 @@ package me.ailinux.workspace;
 
 import android.content.Context;
 import android.net.Uri;
+import android.webkit.MimeTypeMap;
 import androidx.documentfile.provider.DocumentFile;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -48,6 +49,19 @@ final class SafWorkspace {
         return String.join("/", parts);
     }
 
+    static String mimeForName(String name) {
+        String lower = name == null ? "" : name.toLowerCase(Locale.ROOT);
+        int dot = lower.lastIndexOf('.');
+        if (dot > 0 && dot < lower.length() - 1) {
+            String ext = lower.substring(dot + 1);
+            String mapped = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
+            if (mapped != null && !mapped.isEmpty()) return mapped;
+        }
+        // application/octet-stream avoids SAF providers auto-appending ".txt"
+        // while the workspace contract still treats the content as bounded UTF-8 text.
+        return "application/octet-stream";
+    }
+
     private DocumentFile resolve(String raw, boolean createDirs, boolean wantFile, boolean createFile) throws Exception {
         String p = cleanPath(raw);
         if (p.isEmpty()) return root;
@@ -58,7 +72,7 @@ final class SafWorkspace {
             boolean finalPart = i == last;
             DocumentFile next = cur.findFile(parts[i]);
             if (next == null && (!finalPart || !wantFile) && createDirs) next = cur.createDirectory(parts[i]);
-            if (next == null && finalPart && wantFile && createFile) next = cur.createFile("text/plain", parts[i]);
+            if (next == null && finalPart && wantFile && createFile) next = cur.createFile(mimeForName(parts[i]), parts[i]);
             if (next == null) throw new FileNotFoundException(p);
             if (!finalPart && !next.isDirectory()) throw new IOException("not a directory: " + parts[i]);
             cur = next;

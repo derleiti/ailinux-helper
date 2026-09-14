@@ -304,3 +304,19 @@ test('desktop compute advertises bounded docker capacity without claiming host G
   assert.match(source, /gpu:\s*''/);
   assert.match(source, /vram_mb:\s*0/);
 });
+
+test('android SAF preserves requested filenames without text/plain suffix rewriting', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/SafWorkspace.java'), 'utf8');
+  assert.match(source, /static String mimeForName\(String name\)/);
+  assert.match(source, /application\/octet-stream/);
+  assert.match(source, /createFile\(mimeForName\(parts\[i\]\), parts\[i\]\)/);
+  assert.doesNotMatch(source, /createFile\("text\/plain", parts\[i\]\)/);
+});
+
+
+test('android helper reconnects on server initiated websocket close', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/ProtocolClient.java'), 'utf8');
+  assert.match(source, /onClosing\(WebSocket socket,int code,String reason\)/);
+  assert.match(source, /scheduleReconnect\(\"Server disconnected \(\"\+code\+\"\)\"\)/);
+  assert.match(source, /socket\.close\(code,reason\)/);
+});

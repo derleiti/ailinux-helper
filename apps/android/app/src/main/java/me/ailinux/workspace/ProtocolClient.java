@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 final class ProtocolClient extends WebSocketListener {
     interface Listener { void onState(String state); void onResumeToken(String token); void onPairCode(String code); }
-    static final String VERSION="2.90.14-android";
+    static final String VERSION="2.90.15-android";
     static final String BASE="https://api.ailinux.me";
     private static final String TAG="AILinuxWorkspace";
     private final Context context; private final StateStore state; private final Listener listener;
@@ -102,6 +102,16 @@ final class ProtocolClient extends WebSocketListener {
     private JSONObject clipboardWrite(String text)throws Exception{if(!state.clipboardWrite())throw new IllegalStateException("clipboard write is not shared");String value=text==null?"":text;if(value.length()>1024*1024)value=value.substring(0,1024*1024);ClipboardManager cm=(ClipboardManager)context.getSystemService(Context.CLIPBOARD_SERVICE);if(cm==null)throw new IllegalStateException("clipboard service unavailable");cm.setPrimaryClip(ClipData.newPlainText("AILinux Helper",value));return new JSONObject().put("ok",true).put("bytes",value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length); }
     private void stage(WebSocket socket,String id,String tool,String stage)throws Exception{socket.send(new JSONObject().put("jsonrpc","2.0").put("method","workspace/tool_stage").put("params",new JSONObject().put("request_id",id).put("tool",tool).put("stage",stage)).toString());}
     private JSONObject resultMessage(Object id,JSONObject data,boolean error)throws Exception{JSONObject structured=new JSONObject(data.toString());JSONArray content=new JSONArray();String mime=structured.optString("mime",structured.optString("mimeType",""));String encoded=structured.optString("data","");if(!error&&mime.startsWith("image/")&&!encoded.isEmpty()){content.put(new JSONObject().put("type","image").put("data",encoded).put("mimeType",mime));structured.remove("data");structured.put("mimeType",mime);}else content.put(new JSONObject().put("type","text").put("text",data.toString()));JSONObject r=new JSONObject().put("content",content).put("structuredContent",structured).put("isError",error);return new JSONObject().put("jsonrpc","2.0").put("id",id==null?JSONObject.NULL:id).put("result",r);}
+    @Override public void onClosing(WebSocket socket,int code,String reason){
+        if(socket!=ws){socket.close(code,reason);return;}
+        // OkHttp expects the client to acknowledge a peer-initiated close. During
+        // a TriForce restart the server sends 1012; waiting only for onClosed can
+        // leave the foreground executor attached to a dead socket indefinitely.
+        ws=null;connecting.set(false);
+        if(code==4003){state.clearPairCode();handoffCode="";}
+        try{socket.close(code,reason);}catch(Exception ignored){}
+        if(!stopped.get())scheduleReconnect("Server disconnected ("+code+")");
+    }
     @Override public void onClosed(WebSocket socket,int code,String reason){if(socket!=ws)return;ws=null;connecting.set(false);if(code==4003){state.clearPairCode();handoffCode="";}if(!stopped.get())scheduleReconnect("Disconnected ("+code+")");}
     @Override public void onFailure(WebSocket socket,Throwable t,Response response){if(socket!=ws)return;ws=null;connecting.set(false);String detail=t==null?"unknown":t.getClass().getSimpleName()+(t.getMessage()==null?"":" · "+t.getMessage());Log.w(TAG,"WebSocket failure: "+detail,t);if(!stopped.get())scheduleReconnect("Connection lost · "+detail);}
     private synchronized void cancelReconnect(){ScheduledFuture<?> f=reconnectFuture;if(f!=null)f.cancel(false);reconnectFuture=null;}
