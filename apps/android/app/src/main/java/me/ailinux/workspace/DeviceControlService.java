@@ -109,18 +109,64 @@ public final class DeviceControlService extends AccessibilityService {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) throw new IllegalStateException("no active accessibility window");
         AccessibilityNodeInfo focus = null;
+        String focusStrategy = "findFocus";
         try {
             focus = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
-            if (focus == null || !focus.isEditable()) throw new IllegalStateException("no editable input field is focused");
+            if (focus == null || !focus.isEditable()) {
+                if (focus != null) { focus.recycle(); focus = null; }
+                focus = findFocusedEditable(root);
+                focusStrategy = "tree_focused_editable";
+            }
+            if (focus == null) throw new IllegalStateException("no editable input field is focused");
             Bundle bundle = new Bundle();
             bundle.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
-            if (!focus.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle))
-                throw new IllegalStateException("focused field rejected text input");
-            return new JSONObject().put("ok", true).put("action", "type").put("characters", text.length());
+            if (!focus.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle)) {
+                focus.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
+                if (!focus.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle))
+                    throw new IllegalStateException("focused field rejected text input");
+                focusStrategy += "+action_focus";
+            }
+            return new JSONObject().put("ok", true).put("action", "type")
+                    .put("characters", text.length()).put("focus_strategy", focusStrategy);
         } finally {
             if (focus != null) focus.recycle();
             root.recycle();
         }
+    }
+
+    private static AccessibilityNodeInfo findFocusedEditable(AccessibilityNodeInfo node) {
+        if (node == null) return null;
+        if (node.isEditable() && node.isFocused()) return AccessibilityNodeInfo.obtain(node);
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try {
+                AccessibilityNodeInfo found = findFocusedEditable(child);
+                if (found != null) return found;
+            } finally {
+                child.recycle();
+            }
+        }
+        return null;
+    }
+
+    static long currentEventId() { return accessibilityEventId; }
+
+    static JSONObject sceneAfterInteraction(long previousEventId, long maxWaitMs) throws Exception {
+        long wait = Math.max(0L, Math.min(500L, maxWaitMs));
+        long deadline = System.currentTimeMillis() + wait;
+        long lastSeen = accessibilityEventId;
+        long stableSince = System.currentTimeMillis();
+        while (System.currentTimeMillis() < deadline) {
+            long current = accessibilityEventId;
+            if (current != lastSeen) {
+                lastSeen = current;
+                stableSince = System.currentTimeMillis();
+            }
+            if (current != previousEventId && System.currentTimeMillis() - stableSince >= 35L) break;
+            Thread.sleep(10L);
+        }
+        return scene();
     }
 
     static JSONObject scene() throws Exception {
