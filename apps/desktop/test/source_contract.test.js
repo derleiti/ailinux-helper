@@ -418,3 +418,56 @@ test('android executor retries a transport that never completes the protocol han
   assert.match(protocol, /socket\.cancel\(\)/);
   assert.match(protocol, /scheduleReconnect\("Protocol handshake timeout"\)/);
 });
+
+
+// ---------------------------------------------------------------------------
+// P0 guardrails: pairing credentials must never reach a URL or a notification.
+// These are source-level guardrails, not semantic tests. main.js cannot be
+// required outside Electron (its top level calls app.*), so behaviour is
+// asserted on the source contract until an Electron smoke test exists.
+// ---------------------------------------------------------------------------
+
+test('deep links never promote a pair code into an HTTPS request target', () => {
+  // The old shape was: url.searchParams.set('pair_code', ...) on the navigation
+  // target. That leaks the credential into browser history, the Referer header
+  // and every reverse-proxy access log on the way to api.ailinux.me.
+  assert.doesNotMatch(source, /searchParams\.set\(\s*['"](?:pair_code|code|resume_token|workspace_token|handoff_code)['"]/);
+  assert.match(source, /function deepLinkFromArgv\(argv\)/);
+  // The navigation target is rebuilt with an emptied query and fragment.
+  assert.match(source, /base\.search\s*=\s*''/);
+  assert.match(source, /base\.hash\s*=\s*''/);
+});
+
+test('a deep-link pair code is handed over once through the preload contract', () => {
+  const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+  assert.match(source, /ailinux-helper:consume-pair-code/);
+  assert.match(preload, /ailinux-helper:consume-pair-code/);
+  assert.match(preload, /consumePairCode/);
+
+  // The handler must be sender-validated like every other privileged channel.
+  const start = source.indexOf("ipcMain.handle('ailinux-helper:consume-pair-code'");
+  assert.ok(start >= 0, 'consume-pair-code handler is missing');
+  const handler = source.slice(start, start + 400);
+  assert.match(handler, /assertTrustedIpc\(event\)/);
+
+  // One-shot: the slot is cleared on read so the credential cannot be replayed.
+  assert.match(source, /function consumePendingPairCode\(\)/);
+  assert.match(source, /pendingPairCode\s*=\s*null;\s*\n\s*return code/);
+});
+
+test('android never renders the pairing credential into a notification', () => {
+  const service = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/WorkspaceService.java'), 'utf8');
+  const protocol = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/ProtocolClient.java'), 'utf8');
+
+  // Notifications are mirrored to the lock screen and Notification History.
+  assert.doesNotMatch(service, /notification\("Pair code · "\+code\)/);
+  assert.match(service, /Pair code ready · open the app/);
+  assert.match(service, /Waiting for pairing/);
+
+  // onState() feeds the same notification, so it must not carry the code either.
+  assert.doesNotMatch(protocol, /onState\("Waiting for AI pairing · "\+code\)/);
+  assert.match(protocol, /Waiting for AI pairing · open the app for the code/);
+
+  // The code still reaches the app UI over the package-private broadcast.
+  assert.match(service, /putExtra\("pair_code",code\)/);
+});

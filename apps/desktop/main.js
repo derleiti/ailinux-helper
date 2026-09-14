@@ -29,6 +29,7 @@ let tray = null;
 let quitting = false;
 let powerBlockerId = null;
 let pendingDeepLink = null;
+let pendingPairCode = null;
 let connectionState = 'Starting';
 let lastNotifiedState = '';
 let statusTimer = null;
@@ -326,6 +327,14 @@ function registerHelperIpc() {
     if (!allowed) return { ok: false, id: service.id, action: name, error: 'cancelled by user' };
     return serviceRuntime.action(service.id, name);
   });
+  ipcMain.handle('ailinux-helper:consume-pair-code', (event) => {
+    // One-shot: the deep-link credential is handed to the trusted page exactly
+    // once and cleared immediately, so it never sits in a replayable slot.
+    assertTrustedIpc(event);
+    const code = consumePendingPairCode();
+    helperLog('deep_link_pair_code_consumed', { delivered: Boolean(code) });
+    return { pair_code: code };
+  });
   ipcMain.handle('ailinux-helper:ui-clipboard-write', (event, text) => {
     assertTrustedIpc(event);
     const value = String(text ?? '').slice(0, 1024 * 1024);
@@ -475,25 +484,55 @@ function safeTarget(value) {
   }
 }
 
-function targetFromArgv(argv) {
+// P0: a deep link may carry a one-time pair code, but that credential must
+// never be promoted into an HTTPS request target. A query parameter is copied
+// into the Electron navigation URL, the renderer's location, the Referer header
+// and every reverse proxy / Cloudflare access log on the path. The link is
+// therefore split: the navigation target keeps only the origin+path, and the
+// credential is handed to the page over the preload contract instead.
+function deepLinkFromArgv(argv) {
   for (const arg of argv) {
     if (typeof arg !== 'string' || !PROTOCOLS.some((protocol) => arg.startsWith(`${protocol}://`))) continue;
     try {
       const deepLink = new URL(arg);
       const requested = deepLink.searchParams.get('url');
-      const pairCode = deepLink.searchParams.get('pair_code') || deepLink.searchParams.get('code');
-      const baseTarget = requested ? safeTarget(requested) : START_URL;
-      if (pairCode) {
-        const url = new URL(baseTarget);
-        url.searchParams.set('pair_code', pairCode.trim().toUpperCase());
-        return url.toString();
-      }
-      if (requested) return baseTarget;
+      const rawPair = deepLink.searchParams.get('pair_code') || deepLink.searchParams.get('code') || '';
+      const pairCode = String(rawPair).trim().toUpperCase();
+      if (!requested && !pairCode) continue;
+      // safeTarget() already strips anything outside the trusted origin and
+      // /v1/mcp; re-parsing guarantees no inherited query survives.
+      const base = new URL(safeTarget(requested || START_URL));
+      base.search = '';
+      base.hash = '';
+      return { url: base.toString(), pairCode };
     } catch {
-      return START_URL;
+      return { url: START_URL, pairCode: '' };
     }
   }
   return null;
+}
+
+// Kept for the existing callers/tests that only need a navigation target.
+function targetFromArgv(argv) {
+  const link = deepLinkFromArgv(argv);
+  return link ? link.url : null;
+}
+
+// One-shot handover slot. Read exactly once by the trusted renderer, then
+// cleared, so a stale credential cannot be replayed by a later page load.
+function acceptDeepLink(link) {
+  if (!link) return null;
+  if (link.pairCode) {
+    pendingPairCode = link.pairCode;
+    helperLog('deep_link_pair_code_received', { has_code: true });
+  }
+  return link.url;
+}
+
+function consumePendingPairCode() {
+  const code = pendingPairCode;
+  pendingPairCode = null;
+  return code || '';
 }
 
 function isTrustedDocument(urlValue) {
@@ -692,14 +731,14 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
-    const target = targetFromArgv(argv);
+    const target = acceptDeepLink(deepLinkFromArgv(argv));
     if (target) navigate(target).catch(() => {});
     else showWindow();
   });
 
   app.on('open-url', (event, url) => {
     event.preventDefault();
-    const target = targetFromArgv([url]);
+    const target = acceptDeepLink(deepLinkFromArgv([url]));
     if (!target) return;
     if (window) navigate(target).catch(() => {});
     else pendingDeepLink = target;
@@ -708,7 +747,7 @@ if (!gotLock) {
   app.whenReady().then(() => {
     app.setName(APP_NAME);
     for (const protocol of PROTOCOLS) app.setAsDefaultProtocolClient(protocol);
-    pendingDeepLink = targetFromArgv(process.argv) || pendingDeepLink;
+    pendingDeepLink = acceptDeepLink(deepLinkFromArgv(process.argv)) || pendingDeepLink;
     loadDeviceShare();
     registerHelperIpc();
     powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
@@ -731,4 +770,4 @@ if (!gotLock) {
   });
 }
 
-module.exports = { safeTarget, targetFromArgv, isTrustedDocument };
+module.exports = { safeTarget, targetFromArgv, deepLinkFromArgv, isTrustedDocument };

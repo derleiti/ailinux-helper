@@ -85,7 +85,10 @@ final class ProtocolClient extends WebSocketListener {
                     if(code.isEmpty()){scheduleReconnect("Pair ticket returned no code");return;}
                     state.setPairCode(code);
                     listener.onPairCode(code);
-                    listener.onState("Waiting for AI pairing · "+code);
+                    // P0: onState() is rendered into the foreground notification,
+                    // so it must not carry the pairing credential. The code is
+                    // delivered to the app UI through onPairCode() instead.
+                    listener.onState("Waiting for AI pairing · open the app for the code");
                     openSocket("pair_code",code);
                 }catch(Exception e){scheduleReconnect("Pair ticket error");}
             }

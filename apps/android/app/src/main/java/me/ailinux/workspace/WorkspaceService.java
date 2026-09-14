@@ -102,7 +102,17 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
     @Override public IBinder onBind(Intent intent){return null;}
     @Override public void onState(String value){getSystemService(NotificationManager.class).notify(8606,notification(value));sendBroadcast(new Intent("me.ailinux.workspace.STATE").setPackage(getPackageName()).putExtra("state",value));}
     @Override public void onResumeToken(String token){}
-    @Override public void onPairCode(String code){sendBroadcast(new Intent("me.ailinux.workspace.STATE").setPackage(getPackageName()).putExtra("pair_code",code));getSystemService(NotificationManager.class).notify(8606,notification("Pair code · "+code));}
+    // P0: the pairing credential must never reach the notification shade. A
+    // notification is mirrored to the lock screen, Notification History and
+    // (on many OEM builds) the system log, so anyone with a glance at the
+    // device could claim the workspace. The code itself travels only through
+    // the package-private STATE broadcast into the app UI, where the user can
+    // read and copy it deliberately.
+    @Override public void onPairCode(String code){
+        sendBroadcast(new Intent("me.ailinux.workspace.STATE").setPackage(getPackageName()).putExtra("pair_code",code));
+        boolean ready=code!=null&&!code.trim().isEmpty();
+        getSystemService(NotificationManager.class).notify(8606,notification(ready?"Pair code ready · open the app":"Waiting for pairing"));
+    }
 
     private void updateForeground(String text,boolean mediaProjection){
         Notification n=notification(text);

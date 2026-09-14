@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('ailinuxHelper', Object.freeze({
     ipcRenderer.on('ailinux:share-profile-changed', (_event, profile) => callback(profile));
   },
   uiClipboardWrite: (text) => ipcRenderer.invoke('ailinux-helper:ui-clipboard-write', String(text ?? '')),
+  // One-shot deep-link handover. Returns {pair_code} once, then empty. The
+  // credential deliberately travels over IPC instead of the page URL.
+  consumePairCode: () => ipcRenderer.invoke('ailinux-helper:consume-pair-code'),
   clipboardRead: () => ipcRenderer.invoke('ailinux-helper:clipboard-read'),
   clipboardWrite: (text) => ipcRenderer.invoke('ailinux-helper:clipboard-write', String(text ?? '')),
   screenshot: () => ipcRenderer.invoke('ailinux-helper:screenshot'),

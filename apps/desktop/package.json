@@ -10,7 +10,8 @@
     "dist": "electron-builder",
     "dist:linux": "electron-builder --linux AppImage deb",
     "dist:win": "electron-builder --win nsis portable",
-    "dist:mac": "electron-builder --mac dmg zip"
+    "dist:mac": "electron-builder --mac dmg zip",
+    "test": "npm run check"
   },
   "devDependencies": {
     "electron": "44.3.0",
