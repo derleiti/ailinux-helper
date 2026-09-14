@@ -32,6 +32,7 @@ let connectionState = 'Starting';
 let lastNotifiedState = '';
 let statusTimer = null;
 let liveVision = null;
+let computerControlConfirmed = false;
 
 let deviceShare = {
   clipboardRead: false,
@@ -44,6 +45,17 @@ let deviceShare = {
   computeAdvertise: false,
   mcpAdvertise: false,
 };
+
+
+function helperLog(event, detail = {}) {
+  try {
+    const record = { ts: new Date().toISOString(), event: String(event || 'event'), ...detail };
+    const line = JSON.stringify(record) + '\n';
+    const logPath = path.join(app.getPath('userData'), 'helper-runtime.jsonl');
+    fs.appendFileSync(logPath, line, { encoding: 'utf8', mode: 0o600 });
+    console.log('[AILinux Helper]', line.trim());
+  } catch {}
+}
 
 function deviceSharePath() {
   return path.join(app.getPath('userData'), 'mcp-device-share.json');
@@ -149,7 +161,9 @@ function updateDeviceShare(patch = {}) {
   const allowed = ['clipboardRead', 'clipboardWrite', 'screenObserve', 'systemObserve', 'systemControl', 'computerControl', 'resourceAdvertise', 'computeAdvertise', 'mcpAdvertise'];
   for (const key of allowed) if (Object.prototype.hasOwnProperty.call(patch, key)) deviceShare[key] = patch[key] === true;
   if (deviceShare.computeAdvertise && !shellBackends.backendAvailable('docker')[0]) deviceShare.computeAdvertise = false;
+  if (Object.prototype.hasOwnProperty.call(patch, 'computerControl') && patch.computerControl !== true) computerControlConfirmed = false;
   saveDeviceShare();
+  helperLog('share_profile_changed', { profile: publicShareProfile(), adapters: portableRuntime.capabilities() });
   rebuildTrayMenu();
   try { window?.webContents?.send('ailinux:share-profile-changed', publicShareProfile()); } catch {}
   return publicShareProfile();
@@ -217,10 +231,11 @@ async function releaseHostShell() {
 }
 
 function registerHelperIpc() {
-  if (!liveVision) liveVision = new DesktopLiveVision({ desktopCapturer, screen });
+  if (!liveVision) liveVision = new DesktopLiveVision({ desktopCapturer, screen, onEvent: (event, detail) => helperLog('vision_' + event, detail) });
   ipcMain.handle('ailinux-helper:get-capabilities', (event) => {
     assertTrustedIpc(event);
-    return {
+    const adapters = portableRuntime.capabilities();
+    const capabilities = {
       platform: PLATFORM_LABEL,
       clipboard_read: deviceShare.clipboardRead,
       clipboard_write: deviceShare.clipboardWrite,
@@ -242,6 +257,16 @@ function registerHelperIpc() {
       compute_execute: publicShareProfile().compute.advertise,
       share_profile: publicShareProfile(),
     };
+    helperLog('capabilities_requested', {
+      adapters,
+      computer_control_shared: deviceShare.computerControl,
+      computer_input: capabilities.computer_input,
+      resources_path: process.resourcesPath || '',
+      wayland: Boolean(process.env.WAYLAND_DISPLAY || String(process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland'),
+      path_present: Boolean(process.env.PATH),
+      dbus_present: Boolean(process.env.DBUS_SESSION_BUS_ADDRESS),
+    });
+    return capabilities;
   });
   ipcMain.handle('ailinux-helper:get-share-profile', (event) => {
     assertTrustedIpc(event);
@@ -364,10 +389,25 @@ function registerHelperIpc() {
   ipcMain.handle('ailinux-helper:computer-input', async (event, args) => {
     assertTrustedIpc(event);
     if (!deviceShare.computerControl) throw new Error('computer control is not shared');
-    if (!(await confirmPrivilegedAction('send keyboard or pointer input', 'The AI will interact with the local desktop.'))) return { ok: false, error: 'cancelled by user' };
-    const result = await portableRuntime.computerInput(args && typeof args === 'object' ? args : {});
-    liveVision?.noteInteraction();
-    return result;
+    if (!computerControlConfirmed) {
+      const allowed = await confirmPrivilegedAction(
+        'enable mouse and keyboard control for this Helper session',
+        'After this one-time confirmation, bounded AI input calls are allowed until computer control is disabled or the Helper exits. Wayland may show an additional system Remote Desktop permission dialog.'
+      );
+      if (!allowed) return { ok: false, error: 'cancelled by user' };
+      computerControlConfirmed = true;
+      helperLog('computer_control_confirmed', { adapter: portableRuntime.inputAdapter() });
+    }
+    const payload = args && typeof args === 'object' ? args : {};
+    try {
+      const result = await portableRuntime.computerInput(payload);
+      helperLog('computer_input', { action: String(payload.action || ''), ok: result?.ok !== false, adapter: result?.adapter || portableRuntime.inputAdapter() });
+      liveVision?.noteInteraction();
+      return result;
+    } catch (error) {
+      helperLog('computer_input_error', { action: String(payload.action || ''), error: String(error?.message || error), adapter: portableRuntime.inputAdapter() });
+      throw error;
+    }
   });
   ipcMain.handle('ailinux-helper:vision-start', async (event, args) => {
     assertTrustedIpc(event); if (!deviceShare.screenObserve) throw new Error('screen observation is not shared');

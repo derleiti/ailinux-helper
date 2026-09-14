@@ -162,6 +162,9 @@ public final class DeviceControlService extends AccessibilityService {
                     .put("clickable", node.isClickable())
                     .put("editable", node.isEditable())
                     .put("scrollable", node.isScrollable())
+                    .put("checkable", node.isCheckable())
+                    .put("checked", node.isChecked())
+                    .put("selected", node.isSelected())
                     .put("focused", node.isFocused())
                     .put("enabled", node.isEnabled());
             out.put(item);
