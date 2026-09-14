@@ -1,1 +1,5 @@
 apps/android/gradlew.bat text eol=crlf
+
+# Vendored Pyodide files are release artifacts with byte-pinned SHA-256 digests.
+# Never rewrite line endings on Windows checkouts.
+apps/web/vendor/pyodide/** -text
