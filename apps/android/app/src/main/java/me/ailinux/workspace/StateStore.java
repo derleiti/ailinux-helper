@@ -10,7 +10,12 @@ final class StateStore {
     // MediaProjection consent cannot be persisted/replayed across process death.
     private static volatile boolean screenObserveSession = false;
     private final SharedPreferences prefs;
-    StateStore(Context context) { prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
+    private final SecureCredentialStore credentials;
+    StateStore(Context context) {
+        prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        credentials = new SecureCredentialStore(context);
+        migrateLegacyCredentials();
+    }
     boolean setTree(Uri uri) {
         String next = uri == null ? "" : uri.toString();
         String previous = prefs.getString("tree_uri", "");
@@ -23,18 +28,18 @@ final class StateStore {
     String mode() { return prefs.getString("mode", "read_only"); }
     void setPairCode(String code) {
         String next = code == null ? "" : code.trim().toUpperCase();
-        SharedPreferences.Editor editor = prefs.edit().putString("pair_code", next);
-        if (!next.isEmpty()) editor.remove("resume_token");
-        editor.apply();
+        credentials.put("pair_code", next);
+        if (!next.isEmpty()) credentials.remove("resume_token");
     }
-    String pairCode() { return prefs.getString("pair_code", ""); }
-    void clearPairCode() { prefs.edit().remove("pair_code").apply(); }
-    void setResumeToken(String token) { prefs.edit().putString("resume_token", token == null ? "" : token).apply(); }
+    String pairCode() { return credentials.get("pair_code"); }
+    void clearPairCode() { credentials.remove("pair_code"); }
+    void setResumeToken(String token) { credentials.put("resume_token", token == null ? "" : token); }
     void setResumeCredential(String token) {
         String value = token == null ? "" : token;
-        prefs.edit().putString("resume_token", value).remove("pair_code").commit();
+        credentials.put("resume_token", value);
+        credentials.remove("pair_code");
     }
-    String resumeToken() { return prefs.getString("resume_token", ""); }
+    String resumeToken() { return credentials.get("resume_token"); }
     String machineId() {
         String value = prefs.getString("machine_id", "");
         if (value != null && !value.isEmpty()) return value;
@@ -63,5 +68,29 @@ final class StateStore {
         prefs.edit().putString("visibility", value).apply();
     }
     String visibility() { return prefs.getString("visibility", "private"); }
-    void clearCredentials() { prefs.edit().remove("pair_code").remove("resume_token").apply(); }
+    void clearCredentials() { credentials.clear(); }
+
+    private void migrateLegacyCredentials() {
+        String legacyPair = prefs.getString("pair_code", "");
+        String legacyResume = prefs.getString("resume_token", "");
+        boolean pairPresent = legacyPair != null && !legacyPair.isEmpty();
+        boolean resumePresent = legacyResume != null && !legacyResume.isEmpty();
+        if (!pairPresent && !resumePresent) return;
+        try {
+            if (resumePresent) {
+                credentials.put("resume_token", legacyResume);
+                credentials.remove("pair_code");
+            } else {
+                credentials.put("pair_code", legacyPair.trim().toUpperCase());
+                credentials.remove("resume_token");
+            }
+            // Delete plaintext only after the encrypted write has committed.
+            if (!prefs.edit().remove("pair_code").remove("resume_token").commit()) {
+                throw new IllegalStateException("legacy credential cleanup failed");
+            }
+        } catch (RuntimeException ignored) {
+            // Fail closed: legacy plaintext is never returned as a fallback. A later
+            // process start can retry migration if the keystore becomes available.
+        }
+    }
 }

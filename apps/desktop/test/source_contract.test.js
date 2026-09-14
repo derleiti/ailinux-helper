@@ -471,3 +471,19 @@ test('android never renders the pairing credential into a notification', () => {
   // The code still reaches the app UI over the package-private broadcast.
   assert.match(service, /putExtra\("pair_code",code\)/);
 });
+
+
+test('android workspace credentials use AndroidKeyStore AES-GCM and migrate without plaintext fallback', () => {
+  const store = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/StateStore.java'), 'utf8');
+  const secure = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/SecureCredentialStore.java'), 'utf8');
+  assert.match(secure, /AndroidKeyStore/);
+  assert.match(secure, /AES\/GCM\/NoPadding/);
+  assert.match(secure, /setRandomizedEncryptionRequired\(true\)/);
+  assert.match(secure, /setKeySize\(256\)/);
+  assert.match(store, /migrateLegacyCredentials\(\)/);
+  assert.match(store, /credentials\.put\("resume_token"/);
+  assert.match(store, /credentials\.put\("pair_code"/);
+  assert.doesNotMatch(store, /String pairCode\(\) \{ return prefs\.getString\("pair_code"/);
+  assert.doesNotMatch(store, /String resumeToken\(\) \{ return prefs\.getString\("resume_token"/);
+  assert.match(store, /legacy plaintext is never returned as a fallback/);
+});
