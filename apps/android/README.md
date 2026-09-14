@@ -1,6 +1,6 @@
 # AILinux Workspace for Android
 
-> Current Helper release: **2.90.28**. This Android executor is part of **AILinux Helper**; new branding/protocol references should use `ailinux-helper://` while legacy `ailinux-workspace://` compatibility remains supported. Production release signing is performed with the AILinux signing identity outside Git.
+> Current Helper release: **2.90.29**. This Android executor is part of **AILinux Helper**; new branding/protocol references should use `ailinux-helper://` while legacy `ailinux-workspace://` compatibility remains supported. Production release signing is performed with the AILinux signing identity outside Git.
 
 Native Android companion for `https://api.ailinux.me/v1/mcp`.
 

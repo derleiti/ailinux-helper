@@ -354,7 +354,11 @@ test('android remote control is accessibility-gated and fail-closed', () => {
 
 test('android display control grant mirrors actual accessibility readiness', () => {
   const protocol = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/ProtocolClient.java'), 'utf8');
-  assert.match(protocol, /put\("control",state\.computerControl\(\)&&DeviceControlService\.isReady\(\)\)/);
+  assert.match(protocol, /boolean controlRequested=state\.computerControl\(\)/);
+  assert.match(protocol, /boolean accessibilityReady=DeviceControlService\.isReady\(\)/);
+  assert.match(protocol, /boolean control=controlRequested&&accessibilityReady/);
+  assert.match(protocol, /put\("accessibility_ready",accessibilityReady\)/);
+  assert.match(protocol, /put\("control",control\)/);
 });
 
 

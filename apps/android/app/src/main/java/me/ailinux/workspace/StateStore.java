@@ -30,6 +30,10 @@ final class StateStore {
     String pairCode() { return prefs.getString("pair_code", ""); }
     void clearPairCode() { prefs.edit().remove("pair_code").apply(); }
     void setResumeToken(String token) { prefs.edit().putString("resume_token", token == null ? "" : token).apply(); }
+    void setResumeCredential(String token) {
+        String value = token == null ? "" : token;
+        prefs.edit().putString("resume_token", value).remove("pair_code").commit();
+    }
     String resumeToken() { return prefs.getString("resume_token", ""); }
     String machineId() {
         String value = prefs.getString("machine_id", "");

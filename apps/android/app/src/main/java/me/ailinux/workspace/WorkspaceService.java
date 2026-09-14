@@ -33,6 +33,7 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
         if(connectivityManager!=null){
             networkCallback=new ConnectivityManager.NetworkCallback(){
                 @Override public void onAvailable(Network network){if(client!=null)client.onNetworkAvailable();}
+                @Override public void onLost(Network network){if(client!=null)client.onNetworkLost();}
             };
             try{connectivityManager.registerDefaultNetworkCallback(networkCallback);}catch(Exception ignored){}
         }
