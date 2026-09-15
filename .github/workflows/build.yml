@@ -102,13 +102,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          command -v sdkmanager
+          sdk_root="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager" || { echo "sdkmanager missing at $sdkmanager" >&2; find "$sdk_root/cmdline-tools" -maxdepth 3 -name sdkmanager -type f -print >&2 || true; exit 1; }
+          echo "$sdk_root/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           set +o pipefail
-          yes | sdkmanager --licenses >/dev/null
+          yes | "$sdkmanager" --licenses >/dev/null
           rc=${PIPESTATUS[1]}
           set -o pipefail
           (( rc == 0 )) || exit "$rc"
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;34.0.0"
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;34.0.0"
       - uses: gradle/actions/setup-gradle@v4
       - name: Compile and test Android helper
         run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
