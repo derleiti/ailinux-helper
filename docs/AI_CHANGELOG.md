@@ -1,3 +1,10 @@
+## 2026-09-15 — AILinux Helper 2.90.30 security + WebMCP release
+
+- Version: 2.90.30, Android versionCode 36.
+- P0: Android pairing/resume credentials stay out of URLs/notifications and are protected with AndroidKeyStore AES-GCM.
+- WebMCP runtime/handoff/style assets are externalized for strict CSP and self-hosted Pyodide is release-pinned.
+- CI preserves vendored Pyodide bytes across platforms.
+
 # AI Change Log
 
 ## 2026-09-14 — AILinux Helper 2.90.29 Android reconnect hardening

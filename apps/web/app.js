@@ -5,7 +5,7 @@ const WRITE_TOOLS=['file_edit','directory_create','workspace_clear','code_edit']
 const HELPER_DEVICE_TOOLS=['computer_observe','computer_screenshot','vision_start','vision_status','vision_observe','vision_stop','clipboard_read','clipboard_write','device_info','process_ops','service_ops','app_ops','window_ops','computer_input','device_control','compute_execute'];
 const IGNORE=new Set(['.git','.venv','node_modules','__pycache__','.pytest_cache','.mypy_cache']);
 const MAX_TEXT=2*1024*1024;
-const EXECUTOR_VERSION='2.90.29-browser';
+const EXECUTOR_VERSION='2.90.30-browser';
 let urlPair=(new URLSearchParams(location.search).get('pair_code')||'').trim().toUpperCase();let pairCode=urlPair||sessionStorage.getItem('tf_pair_code')||'',socketTicket='',rootHandle=null,rootEntry=null,workspaceBackend='none',ws=null,workspaceMode=sessionStorage.getItem('tf_workspace_mode')||'read_only',capabilities=[],heartbeatTimer=null,watchdogTimer=null,reconnectTimer=null,reconnectAttempt=0,manualDisconnect=false,lastPongAt=0,workspaceAttached=false,resumeToken='',toolQueue=Promise.resolve(),wakeLockSentinel=null,wakeLockWanted=localStorage.getItem('tf_workspace_wake_lock')==='1',connectPromise=null;if(urlPair){sessionStorage.setItem('tf_pair_code',urlPair);try{history.replaceState({},document.title,location.pathname)}catch{}}
 /* P0: a pairing credential must not travel in the request target. The URL
    branch above is a deprecated fallback for Helper builds <= 2.90.29 that still

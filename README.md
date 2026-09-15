@@ -2,13 +2,13 @@
 
 [![Build](https://github.com/derleiti/ailinux-helper/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/derleiti/ailinux-helper/actions/workflows/build.yml)
 
-**Current release: 2.90.29** · Android · Linux · Windows · macOS · Browser/PWA fallback.
+**Current release: 2.90.30** · Android · Linux · Windows · macOS · Browser/PWA fallback.
 
 AILinux Helper is the endpoint companion for TriForce and Loom. It exposes only the local capabilities a user explicitly shares and keeps device execution separate from the remote control plane.
 
 ## Current release artifacts
 
-Release: https://github.com/derleiti/ailinux-helper/releases/tag/v2.90.29
+Release: https://github.com/derleiti/ailinux-helper/releases/tag/v2.90.30
 
 - Android production-signed APK
 - Linux AppImage
