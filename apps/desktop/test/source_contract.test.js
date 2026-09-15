@@ -497,9 +497,10 @@ test('WebMCP is externalized, self-hosted, and release-manifest pinned', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../release.json'), 'utf8'));
   assert.doesNotMatch(html, /<style\b/i);
   assert.doesNotMatch(html, /\sstyle=/i);
-  assert.match(html, /src="\/v1\/mcp\/web\/app\.js"/);
-  assert.match(html, /href="\/v1\/mcp\/web\/styles\.css"/);
+  assert.match(html, /src="\/v1\/mcp\/web\/app\.js\?v=2\.90\.30"/);
+  assert.match(html, /href="\/v1\/mcp\/web\/styles\.css\?v=2\.90\.30"/);
   assert.doesNotMatch(app, /cdn\.jsdelivr\.net/);
+  assert.match(app, /pyodide-worker\.js\?v=2\.90\.30/);
   assert.doesNotMatch(worker, /cdn\.jsdelivr\.net/);
   assert.doesNotMatch(app, /\.style\./, 'strict CSP forbids dynamic inline style assignments');
   assert.match(worker, /\/v1\/mcp\/pyodide\/v314\.0\.6\//);
