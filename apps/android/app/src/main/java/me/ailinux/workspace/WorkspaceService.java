@@ -141,7 +141,7 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
     @Override public void onPairCode(String code){
         sendBroadcast(new Intent("me.ailinux.workspace.STATE").setPackage(getPackageName()).putExtra("pair_code",code));
         boolean ready=code!=null&&!code.trim().isEmpty();
-        getSystemService(NotificationManager.class).notify(8606,notification(ready?"Pair code ready · open the app":"Waiting for pairing"));
+        getSystemService(NotificationManager.class).notify(8606,notification(ready?"Share ID ready · open the app":"Waiting for AI claim"));
     }
 
     private void updateForeground(String text,boolean mediaProjection){

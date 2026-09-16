@@ -81,11 +81,11 @@ test('native helper IPC rejects untrusted renderer origins', () => {
   assert.match(source, /isTrustedDocument\(senderUrl\)/);
 });
 
-test('android helper keeps rejected pair code visible and never silently rotates it', () => {
+test('android helper keeps rejected Share ID visible and never silently rotates it', () => {
   const protocol = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
   const stateStore = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'StateStore.java'), 'utf8');
   assert.match(protocol, /pairingCredentialRejected\(int code\).*code==4003\|\|code==4403/s);
-  assert.match(protocol, /Pair code invalid or expired · tap Generate new pair code/);
+  assert.match(protocol, /Share ID invalid or expired · tap Generate new Share ID/);
   const closing = protocol.match(/onClosing\(WebSocket socket,int code,String reason\)[\s\S]*?@Override public void onClosed/)?.[0] || '';
   assert.doesNotMatch(closing, /clearPairCode/);
   assert.doesNotMatch(closing, /createPairTicket/);
@@ -111,12 +111,21 @@ test('desktop pair-code copy uses trusted local UI clipboard bridge without enab
   assert.doesNotMatch(handler, /deviceShare\.clipboardWrite/);
 });
 
+test('android pairing UI is helper-first and has no manual inbound code action', () => {
+  const activity = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'MainActivity.java'), 'utf8');
+  assert.match(activity, /Start the executor to create a one-time Share ID/);
+  assert.match(activity, /Copy Share ID/);
+  assert.doesNotMatch(activity, /Button paste=button/);
+  assert.match(activity, /pair\.setFocusable\(false\)/);
+});
+
+
 test('android folder changes rebind the live share while fresh pairing stays explicit', () => {
   const activity = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'MainActivity.java'), 'utf8');
   const service = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'WorkspaceService.java'), 'utf8');
   const stateStore = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'StateStore.java'), 'utf8');
   const protocol = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
-  assert.match(activity, /Generate new pair code/);
+  assert.match(activity, /Generate new Share ID/);
   assert.match(activity, /beginFreshPairing/);
   assert.match(activity, /showPairCode\("",true\)/);
   assert.match(activity, /boolean changed=state\.setTree\(uri\)/);
@@ -477,12 +486,12 @@ test('android never renders the pairing credential into a notification', () => {
 
   // Notifications are mirrored to the lock screen and Notification History.
   assert.doesNotMatch(service, /notification\("Pair code · "\+code\)/);
-  assert.match(service, /Pair code ready · open the app/);
-  assert.match(service, /Waiting for pairing/);
+  assert.match(service, /Share ID ready · open the app/);
+  assert.match(service, /Waiting for AI claim/);
 
   // onState() feeds the same notification, so it must not carry the code either.
   assert.doesNotMatch(protocol, /onState\("Waiting for AI pairing · "\+code\)/);
-  assert.match(protocol, /Waiting for AI pairing · open the app for the code/);
+  assert.match(protocol, /Waiting for AI claim · open the app for the Share ID/);
 
   // The code still reaches the app UI over the package-private broadcast.
   assert.match(service, /putExtra\("pair_code",code\)/);
