@@ -5,12 +5,16 @@ import android.content.*;
 import android.content.pm.ServiceInfo;
 import android.net.ConnectivityManager;
 import android.net.Network;
+import android.os.SystemClock;
 import android.os.*;
 import androidx.core.app.NotificationCompat;
 
 public class WorkspaceService extends Service implements ProtocolClient.Listener {
     public static final String ACTION_START="me.ailinux.workspace.START",ACTION_RECONNECT="me.ailinux.workspace.RECONNECT",ACTION_NEW_PAIR="me.ailinux.workspace.NEW_PAIR",ACTION_ENABLE_SCREEN="me.ailinux.workspace.ENABLE_SCREEN",ACTION_DISABLE_SCREEN="me.ailinux.workspace.DISABLE_SCREEN",ACTION_STOP="me.ailinux.workspace.STOP",EXTRA_HANDOFF="handoff_code",EXTRA_CAPTURE_RESULT="capture_result",EXTRA_CAPTURE_DATA="capture_data";
     private static final String CHANNEL="workspace_executor";
+    private static final int RECOVERY_REQUEST=8607;
+    private static final long RECOVERY_INTERVAL_MS=10*60*1000L;
+    private static volatile boolean active=false;
     private ProtocolClient client;
     private ScreenCapture screenCapture;
     private StateStore state;
@@ -20,6 +24,7 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
 
     @Override public void onCreate(){
         super.onCreate();
+        active=true;
         createChannel();
         state=new StateStore(this);
         screenCapture=new ScreenCapture(this,()->new Handler(Looper.getMainLooper()).post(()->{
@@ -42,6 +47,8 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         String action=intent==null?ACTION_START:intent.getAction();
         if(ACTION_STOP.equals(action)){
+            state.setExecutorWanted(false);
+            cancelRecoveryAlarm(this);
             if(client!=null)client.stop(true);
             if(screenCapture!=null)screenCapture.stop();
             state.setScreenObserveWanted(false);
@@ -51,6 +58,8 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
             stopSelf();
             return START_NOT_STICKY;
         }
+        state.setExecutorWanted(true);
+        scheduleRecoveryAlarm(this,RECOVERY_INTERVAL_MS);
         acquireWakeLock();
         updateForeground("Starting workspace executor…",false);
 
@@ -89,16 +98,37 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
 
     @Override public void onTaskRemoved(Intent rootIntent){
         if(client!=null)client.onNetworkAvailable();
+        if(state!=null&&state.executorWanted())scheduleRecoveryAlarm(this,5000L);
         super.onTaskRemoved(rootIntent);
     }
 
     @Override public void onDestroy(){
+        active=false;
+        if(state!=null&&state.executorWanted())scheduleRecoveryAlarm(this,5000L);
         if(connectivityManager!=null&&networkCallback!=null){try{connectivityManager.unregisterNetworkCallback(networkCallback);}catch(Exception ignored){}}
         if(client!=null)client.stop(false);
         if(screenCapture!=null)screenCapture.shutdown();
         releaseWakeLock();
         super.onDestroy();
     }
+    static boolean isActive(){return active;}
+    static void scheduleRecoveryAlarm(Context context,long delayMs){
+        AlarmManager alarms=(AlarmManager)context.getSystemService(Context.ALARM_SERVICE);
+        if(alarms==null)return;
+        Intent wake=new Intent(context,RecoveryReceiver.class).setAction(RecoveryReceiver.ACTION_RECOVER);
+        PendingIntent pi=PendingIntent.getBroadcast(context,RECOVERY_REQUEST,wake,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        long at=SystemClock.elapsedRealtime()+Math.max(5000L,delayMs);
+        if(Build.VERSION.SDK_INT>=23)alarms.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,at,pi);
+        else alarms.set(AlarmManager.ELAPSED_REALTIME_WAKEUP,at,pi);
+    }
+    static void cancelRecoveryAlarm(Context context){
+        AlarmManager alarms=(AlarmManager)context.getSystemService(Context.ALARM_SERVICE);
+        if(alarms==null)return;
+        Intent wake=new Intent(context,RecoveryReceiver.class).setAction(RecoveryReceiver.ACTION_RECOVER);
+        PendingIntent pi=PendingIntent.getBroadcast(context,RECOVERY_REQUEST,wake,PendingIntent.FLAG_NO_CREATE|PendingIntent.FLAG_IMMUTABLE);
+        if(pi!=null){alarms.cancel(pi);pi.cancel();}
+    }
+
     @Override public IBinder onBind(Intent intent){return null;}
     @Override public void onState(String value){getSystemService(NotificationManager.class).notify(8606,notification(value));sendBroadcast(new Intent("me.ailinux.workspace.STATE").setPackage(getPackageName()).putExtra("state",value));}
     @Override public void onResumeToken(String token){}

@@ -63,6 +63,8 @@ final class StateStore {
     boolean clipboardWrite() { return prefs.getBoolean("clipboard_write", false); }
     void setComputerControl(boolean enabled) { prefs.edit().putBoolean("computer_control", enabled).apply(); }
     boolean computerControl() { return prefs.getBoolean("computer_control", false); }
+    void setExecutorWanted(boolean enabled) { prefs.edit().putBoolean("executor_wanted", enabled).apply(); }
+    boolean executorWanted() { return prefs.getBoolean("executor_wanted", false); }
     void setVisibility(String visibility) {
         String value = "public".equals(visibility) || "unlisted".equals(visibility) ? visibility : "private";
         prefs.edit().putString("visibility", value).apply();
