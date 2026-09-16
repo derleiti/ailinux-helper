@@ -401,13 +401,29 @@ test('android workspace credentials stay out of websocket URLs and device identi
   const end = protocol.indexOf('@Override public void onOpen', start);
   const socket = start >= 0 && end > start ? protocol.slice(start, end) : '';
   assert.doesNotMatch(socket, /[?&](?:pair_code|handoff_code)=/);
-  assert.match(socket, /X-AILinux-Pair-Code/);
+  assert.match(socket, /X-AILinux-Socket-Ticket/);
   assert.match(socket, /X-AILinux-Handoff-Code/);
+  assert.doesNotMatch(socket, /X-AILinux-Pair-Code/);
   assert.match(socket, /X-AILinux-Machine-Id/);
   assert.match(socket, /state\.machineId\(\)/);
   assert.match(stateStore, /String machineId\(\)/);
   assert.match(stateStore, /UUID\.randomUUID\(\)/);
   assert.match(stateStore, /putString\("machine_id", value\)/);
+});
+
+
+test('browser and android exchange durable workspace credentials for one-shot socket tickets', () => {
+  const web = fs.readFileSync(path.join(__dirname, '..', '..', 'web', 'app.js'), 'utf8');
+  const protocol = fs.readFileSync(path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main', 'java', 'me', 'ailinux', 'workspace', 'ProtocolClient.java'), 'utf8');
+  assert.match(web, /\/v1\/mcp\/workspace\/socket-ticket/);
+  assert.match(web, /\/v1\/mcp\/workspace\/resume-ticket/);
+  assert.match(web, /ailinux-ticket\./);
+  assert.match(web, /PAIR_EXPIRED/);
+  assert.match(web, /scheduleReconnect\(\)/);
+  assert.match(protocol, /\/v1\/mcp\/workspace\/socket-ticket/);
+  assert.match(protocol, /optString\("socket_ticket",payload\.optString\("pair_code",""\)\)/);
+  assert.match(protocol, /X-AILinux-Socket-Ticket/);
+  assert.doesNotMatch(protocol.match(/private void openSocket[\s\S]*?@Override public void onOpen/)?.[0] || '', /X-AILinux-Pair-Code/);
 });
 
 
@@ -494,18 +510,24 @@ test('WebMCP is externalized, self-hosted, and release-manifest pinned', () => {
   const html = fs.readFileSync(path.join(webRoot, 'index.html'), 'utf8');
   const app = fs.readFileSync(path.join(webRoot, 'app.js'), 'utf8');
   const worker = fs.readFileSync(path.join(webRoot, 'pyodide-worker.js'), 'utf8');
+  const serviceWorker = fs.readFileSync(path.join(webRoot, 'sw.js'), 'utf8');
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../release.json'), 'utf8'));
   assert.doesNotMatch(html, /<style\b/i);
   assert.doesNotMatch(html, /\sstyle=/i);
   assert.match(html, /src="\/v1\/mcp\/web\/app\.js\?v=2\.90\.30"/);
   assert.match(html, /href="\/v1\/mcp\/web\/styles\.css\?v=2\.90\.30"/);
   assert.doesNotMatch(app, /cdn\.jsdelivr\.net/);
-  assert.match(app, /pyodide-worker\.js\?v=2\.90\.30/);
+  assert.match(app, /pyodide-worker\.js\?v='\+encodeURIComponent\(WEBMCP_BUILD\)/);
+  assert.match(app, /ailinux-webmcp-build/);
   assert.doesNotMatch(worker, /cdn\.jsdelivr\.net/);
   assert.doesNotMatch(app, /\.style\./, 'strict CSP forbids dynamic inline style assignments');
   assert.match(worker, /\/v1\/mcp\/pyodide\/v314\.0\.6\//);
   assert.equal(manifest.aliases.linux, 'linux-appimage');
   assert.equal(manifest.webmcp.pyodide.version, 'v314.0.6');
+  assert.equal(manifest.webmcp.service_worker, 'sw.js');
+  assert.match(serviceWorker, /new URL\(self\.location\.href\)/);
+  assert.match(serviceWorker, /ailinux-helper-'\+BUILD/);
+  assert.doesNotMatch(serviceWorker, /2\.90\.29/);
   assert.equal(manifest.webmcp.threat_model.cloudflare_beacon_allowed, false);
   for (const [name, meta] of Object.entries(manifest.webmcp.pyodide.files)) {
     const content = fs.readFileSync(path.join(webRoot, 'vendor', 'pyodide', 'v314.0.6', name));

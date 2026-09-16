@@ -22,7 +22,7 @@ ARTIFACTS = {
     "ios-simulator": ("ailinux-helper-{v}-ios-simulator.app.zip", "application/zip"),
 }
 PYODIDE_VERSION = "v314.0.6"
-PYODIDE_FILES = ("pyodide.js", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json")
+PYODIDE_FILES = ("pyodide.js", "pyodide.asm.mjs", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json")
 
 def digest(path: Path) -> str:
     h = hashlib.sha256()
@@ -73,6 +73,7 @@ def main() -> int:
             "script": "app.js",
             "stylesheet": "styles.css",
             "worker": "pyodide-worker.js",
+            "service_worker": "sw.js",
             "pyodide": {
                 "version": PYODIDE_VERSION,
                 "base_path": f"/v1/mcp/pyodide/{PYODIDE_VERSION}/",

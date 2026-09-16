@@ -3,6 +3,7 @@ package me.ailinux.workspace;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import java.util.Locale;
 import java.util.UUID;
 
 final class StateStore {
@@ -27,7 +28,7 @@ final class StateStore {
     void setMode(String mode) { prefs.edit().putString("mode", "write".equals(mode) ? "write" : "read_only").apply(); }
     String mode() { return prefs.getString("mode", "read_only"); }
     void setPairCode(String code) {
-        String next = code == null ? "" : code.trim().toUpperCase();
+        String next = code == null ? "" : code.trim().toUpperCase(Locale.ROOT);
         credentials.put("pair_code", next);
         if (!next.isEmpty()) credentials.remove("resume_token");
     }
@@ -83,7 +84,7 @@ final class StateStore {
                 credentials.put("resume_token", legacyResume);
                 credentials.remove("pair_code");
             } else {
-                credentials.put("pair_code", legacyPair.trim().toUpperCase());
+                credentials.put("pair_code", legacyPair.trim().toUpperCase(Locale.ROOT));
                 credentials.remove("resume_token");
             }
             // Delete plaintext only after the encrypted write has committed.

@@ -15,6 +15,7 @@ import org.json.JSONObject;
 import okhttp3.*;
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.util.Locale;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -32,7 +33,7 @@ final class ProtocolClient extends WebSocketListener {
     private final JSONArray readCaps=new JSONArray().put("workspace_info").put("file_read").put("file_tree").put("code_read").put("code_tree").put("code_search").put("code_grep").put("file_ops");
 
     ProtocolClient(Context context, Listener listener, ScreenCapture screenCapture){this.context=context.getApplicationContext();this.state=new StateStore(context);this.listener=listener;this.screenCapture=screenCapture;}
-    void setHandoffCode(String code){handoffCode=code==null?"":code.trim().toUpperCase();}
+    void setHandoffCode(String code){handoffCode=code==null?"":code.trim().toUpperCase(Locale.ROOT);}
     void start(){stopped.set(false);cancelReconnect();WebSocket current=ws;if(current!=null)return;connect();}
     void onNetworkAvailable(){if(stopped.get()||ws!=null||connecting.get())return;reconnectAttempt=0;cancelReconnect();listener.onState("Network available · reconnecting");connect();}
     void onNetworkLost(){if(stopped.get())return;WebSocket socket=ws;if(socket==null)return;listener.onState("Network lost · reconnecting");cancelHandshakeWatchdog();cancelHealthWatchdog();protocolConnected=false;lastInboundAtMs=0L;ws=null;connecting.set(false);try{socket.cancel();}catch(Exception ignored){}scheduleReconnect("Network lost");}
@@ -54,7 +55,7 @@ final class ProtocolClient extends WebSocketListener {
         listener.onState("Connecting executor…");
         if(!handoffCode.isEmpty()){openSocket("handoff_code",handoffCode);return;}
         String pair=state.pairCode();
-        if(pair!=null&&!pair.isEmpty()){listener.onPairCode(pair);openSocket("pair_code",pair);return;}
+        if(pair!=null&&!pair.isEmpty()){listener.onPairCode(pair);requestSocketTicket(pair);return;}
         String resume=state.resumeToken();
         if(resume!=null&&!resume.isEmpty()){
             final RequestBody body;
@@ -68,8 +69,9 @@ final class ProtocolClient extends WebSocketListener {
                         if(!x.isSuccessful()){scheduleReconnect("Resume rejected: "+x.code());return;}
                         ResponseBody responseBody=x.body();
                         if(responseBody==null){scheduleReconnect("Resume returned no body");return;}
-                        String code=new JSONObject(responseBody.string()).optString("pair_code","");
-                        if(code.isEmpty())scheduleReconnect("Resume returned no ticket");else openSocket("pair_code",code);
+                        JSONObject payload=new JSONObject(responseBody.string());
+                        String ticket=payload.optString("socket_ticket",payload.optString("pair_code","")).trim().toUpperCase(Locale.ROOT);
+                        if(ticket.isEmpty())scheduleReconnect("Resume returned no ticket");else openSocket("socket_ticket",ticket);
                     }catch(Exception e){scheduleReconnect("Resume error");}
                 }
             });
@@ -86,7 +88,9 @@ final class ProtocolClient extends WebSocketListener {
                     if(!x.isSuccessful()){scheduleReconnect("Pair ticket rejected: "+x.code());return;}
                     ResponseBody responseBody=x.body();
                     if(responseBody==null){scheduleReconnect("Pair ticket returned no body");return;}
-                    String code=new JSONObject(responseBody.string()).optString("pair_code","").trim().toUpperCase();
+                    JSONObject payload=new JSONObject(responseBody.string());
+                    String code=payload.optString("pair_code","").trim().toUpperCase(Locale.ROOT);
+                    String ticket=payload.optString("socket_ticket","").trim().toUpperCase(Locale.ROOT);
                     if(code.isEmpty()){scheduleReconnect("Pair ticket returned no code");return;}
                     state.setPairCode(code);
                     listener.onPairCode(code);
@@ -94,8 +98,26 @@ final class ProtocolClient extends WebSocketListener {
                     // so it must not carry the pairing credential. The code is
                     // delivered to the app UI through onPairCode() instead.
                     listener.onState("Waiting for AI pairing · open the app for the code");
-                    openSocket("pair_code",code);
+                    if(ticket.isEmpty())requestSocketTicket(code);else openSocket("socket_ticket",ticket);
                 }catch(Exception e){scheduleReconnect("Pair ticket error");}
+            }
+        });
+    }
+    private void requestSocketTicket(String pair){
+        final RequestBody body;
+        try{body=RequestBody.create(new JSONObject().put("pair_code",pair).toString(),MediaType.parse("application/json"));}
+        catch(Exception e){connecting.set(false);scheduleReconnect("Could not prepare socket ticket request");return;}
+        http.newCall(new Request.Builder().url(BASE+"/v1/mcp/workspace/socket-ticket").post(body).build()).enqueue(new Callback(){
+            public void onFailure(Call c,IOException e){scheduleReconnect("Socket ticket failed");}
+            public void onResponse(Call c,Response r)throws IOException{
+                try(Response x=r){
+                    if(x.code()==403){connecting.set(false);stopped.set(true);listener.onState("Pair code invalid or expired · tap Generate new pair code");return;}
+                    if(!x.isSuccessful()){scheduleReconnect("Socket ticket rejected: "+x.code());return;}
+                    ResponseBody responseBody=x.body();
+                    if(responseBody==null){scheduleReconnect("Socket ticket returned no body");return;}
+                    String ticket=new JSONObject(responseBody.string()).optString("socket_ticket","").trim().toUpperCase(Locale.ROOT);
+                    if(ticket.isEmpty())scheduleReconnect("Socket ticket returned no ticket");else openSocket("socket_ticket",ticket);
+                }catch(Exception e){scheduleReconnect("Socket ticket error");}
             }
         });
     }
@@ -103,11 +125,13 @@ final class ProtocolClient extends WebSocketListener {
     private void openSocket(String key,String code){
         String url="wss://api.ailinux.me/v1/mcp/node/connect?mode=workspace&client_version="+enc(VERSION);
         Request.Builder request=new Request.Builder().url(url).header("X-AILinux-Machine-Id",state.machineId());
-        if("handoff_code".equals(key))request.header("X-AILinux-Handoff-Code",code);else request.header("X-AILinux-Pair-Code",code);
+        if("handoff_code".equals(key))request.header("X-AILinux-Handoff-Code",code);
+        else if("socket_ticket".equals(key))request.header("X-AILinux-Socket-Ticket",code);
+        else { connecting.set(false); scheduleReconnect("Unsupported workspace transport credential"); return; }
         WebSocket previous=ws;WebSocket next=http.newWebSocket(request.build(),this);ws=next;if(previous!=null&&previous!=next)previous.cancel();
     }
     @Override public void onOpen(WebSocket socket,Response response){if(socket!=ws){socket.cancel();return;}connecting.set(false);cancelReconnect();reconnectAttempt=0;protocolConnected=false;lastInboundAtMs=android.os.SystemClock.elapsedRealtime();startHandshakeWatchdog(socket);listener.onState("Transport connected · waiting for protocol handshake");}
-    @Override public void onMessage(WebSocket socket,String text){lastInboundAtMs=android.os.SystemClock.elapsedRealtime();try{JSONObject msg=new JSONObject(text);String error=msg.optString("error","");if(!error.isEmpty()){if(error.toLowerCase().contains("workspace credential")||error.toLowerCase().contains("pairing code")){connecting.set(false);stopped.set(true);handoffCode="";cancelHandshakeWatchdog();cancelHealthWatchdog();listener.onState("Pair code invalid or expired · tap Generate new pair code");try{socket.close(1000,"pairing credential rejected");}catch(Exception ignored){}}else listener.onState("Server error · "+error);return;}String method=msg.optString("method","");if("connected".equals(method)){protocolConnected=true;cancelHandshakeWatchdog();startHealthWatchdog(socket);sendHello(socket);return;}if("workspace/shared".equals(method)||"workspace/paired".equals(method)){JSONObject p=msg.optJSONObject("params");if(p!=null&&p.optBoolean("ok",true)){String token=p.optString("resume_token","");if(!token.isEmpty()){state.setResumeCredential(token);handoffCode="";listener.onPairCode("");listener.onResumeToken(token);}listener.onState("Workspace connected · "+state.mode());}return;}if("workspace/detached".equals(method)){listener.onState("AI detached · lease retained");return;}if("ping".equals(method)){socket.send(new JSONObject().put("jsonrpc","2.0").put("method","pong").put("params",msg.optJSONObject("params")==null?new JSONObject():msg.optJSONObject("params")).toString());return;}if("tools/call".equals(method)){tools.submit(()->handleToolCall(socket,msg));}}
+    @Override public void onMessage(WebSocket socket,String text){lastInboundAtMs=android.os.SystemClock.elapsedRealtime();try{JSONObject msg=new JSONObject(text);String error=msg.optString("error","");if(!error.isEmpty()){String normalizedError=error.toLowerCase(Locale.ROOT);if(normalizedError.contains("workspace credential")||normalizedError.contains("pairing code")){connecting.set(false);stopped.set(true);handoffCode="";cancelHandshakeWatchdog();cancelHealthWatchdog();listener.onState("Pair code invalid or expired · tap Generate new pair code");try{socket.close(1000,"pairing credential rejected");}catch(Exception ignored){}}else listener.onState("Server error · "+error);return;}String method=msg.optString("method","");if("connected".equals(method)){protocolConnected=true;cancelHandshakeWatchdog();startHealthWatchdog(socket);sendHello(socket);return;}if("workspace/shared".equals(method)||"workspace/paired".equals(method)){JSONObject p=msg.optJSONObject("params");if(p!=null&&p.optBoolean("ok",true)){String token=p.optString("resume_token","");if(!token.isEmpty()){state.setResumeCredential(token);handoffCode="";listener.onPairCode("");listener.onResumeToken(token);}listener.onState("Workspace connected · "+state.mode());}return;}if("workspace/detached".equals(method)){listener.onState("AI detached · lease retained");return;}if("ping".equals(method)){socket.send(new JSONObject().put("jsonrpc","2.0").put("method","pong").put("params",msg.optJSONObject("params")==null?new JSONObject():msg.optJSONObject("params")).toString());return;}if("tools/call".equals(method)){tools.submit(()->handleToolCall(socket,msg));}}
         catch(Exception e){Log.e(TAG,"protocol message",e);listener.onState("Protocol error: "+e.getMessage());}}
     private void sendHello(WebSocket socket)throws Exception{advertisedDeviceControlReady=state.computerControl()&&DeviceControlService.isReady();JSONArray caps=capabilities();String mode=workspaceMode();String name=workspace==null?"android-device":workspace.info(caps).optString("workspace","android");socket.send(new JSONObject().put("jsonrpc","2.0").put("method","client/info").put("params",new JSONObject().put("client","ailinux-android-workspace").put("platform","Android "+Build.VERSION.RELEASE).put("hostname",Build.MODEL).put("server_version",VERSION).put("mode","workspace").put("workspace",name).put("access_mode",mode).put("remote_profile",mode)).toString());socket.send(new JSONObject().put("jsonrpc","2.0").put("method","tools/list").put("params",new JSONObject().put("tools",new JSONArray().put("client_workspace_tool"))).toString());socket.send(new JSONObject().put("jsonrpc","2.0").put("method","workspace/share").put("params",new JSONObject().put("task","").put("visibility",state.visibility()).put("access_mode",mode).put("mode",mode).put("capabilities",caps).put("resources",new JSONObject().put("workspace",new JSONObject().put("enabled",workspace!=null).put("mode",mode)).put("native",nativeShareProfile()))).toString());}
     private void handleToolCall(WebSocket socket,JSONObject msg){String id=String.valueOf(msg.opt("id"));String tool="";try{JSONObject outer=msg.getJSONObject("params").getJSONObject("arguments");tool=outer.optString("tool","");stage(socket,id,tool,"started");JSONObject args=outer.optJSONObject("arguments");if(args==null)args=new JSONObject();JSONObject data=execute(tool,args);stage(socket,id,tool,"finished");socket.send(resultMessage(msg.opt("id"),data,false).toString());}catch(Exception e){try{stage(socket,id,tool,"failed");socket.send(resultMessage(msg.opt("id"),new JSONObject().put("ok",false).put("error",String.valueOf(e.getMessage())),true).toString());}catch(Exception ignored){}}}
@@ -161,7 +185,7 @@ final class ProtocolClient extends WebSocketListener {
     }
     private synchronized void startHealthWatchdog(WebSocket socket){
         cancelHealthWatchdog();
-        healthFuture=timer.scheduleAtFixedRate(()->{
+        healthFuture=timer.scheduleWithFixedDelay(()->{
             if(stopped.get()||socket!=ws||!protocolConnected)return;
             long now=android.os.SystemClock.elapsedRealtime();
             long silence=lastInboundAtMs<=0L?0L:now-lastInboundAtMs;

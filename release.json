@@ -105,6 +105,10 @@
           "sha256": "3fdaef09e9e365c85e002737720f8d0ab8f278c1c244a2dde6a37663cf488ad4",
           "size": 114440
         },
+        "pyodide.asm.mjs": {
+          "sha256": "2ac5eba365ec12839c75c03b39b3be1dd63b798852cc460b014b52238be042f7",
+          "size": 1250344
+        },
         "pyodide.asm.wasm": {
           "sha256": "3a0a00dfeaa348ac20f9ef09904233d32d33f644339662d4af368f8a2010f37a",
           "size": 9598218
@@ -121,6 +125,7 @@
       "version": "v314.0.6"
     },
     "script": "app.js",
+    "service_worker": "sw.js",
     "source_dir": "apps/web",
     "stylesheet": "styles.css",
     "threat_model": {
