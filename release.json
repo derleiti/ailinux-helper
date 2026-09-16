@@ -4,99 +4,99 @@
   },
   "artifacts": {
     "android": {
-      "filename": "AILinux-Helper-2.90.30-android.apk",
+      "filename": "AILinux-Helper-2.90.33-android.apk",
       "media_type": "application/vnd.android.package-archive",
-      "sha256": "138e65293708a070fafe249c5813e5e33b3b8c269575fa192b50154ebf6262ea",
-      "size": 2195482
+      "sha256": "20affe6338958a513724daae9aff8d28f3f63cffbbabcd61d75030ca764879d4",
+      "size": 2196894
     },
     "android-arm64": {
-      "filename": "ailinux-helper-2.90.30-android-arm64",
+      "filename": "ailinux-helper-2.90.33-android-arm64",
       "media_type": "application/octet-stream",
-      "sha256": "df1f581b0841ad01243407ca605c0df9c1592928156c58545b7819f6086d7e97",
+      "sha256": "42e0078bc31c1375e6fb43be9005e3b288208cc32a3bb20873d2f52f91773b76",
       "size": 1769825
     },
     "arch": {
-      "filename": "ailinux-helper-capsule-2.90.30-1-x86_64.pkg.tar.zst",
+      "filename": "ailinux-helper-capsule-2.90.33-1-x86_64.pkg.tar.zst",
       "media_type": "application/zstd",
-      "sha256": "143f9b698adf5ccfeb679bcc23e7d13a18aad3d934e609ec34c767269820eac0",
-      "size": 707820
+      "sha256": "12c1ad0c8217c4072dfb33781205dc943c730b87bc3248eaa1ea37596667592d",
+      "size": 707812
     },
     "freebsd": {
-      "filename": "ailinux-helper-2.90.30-freebsd-x86_64",
+      "filename": "ailinux-helper-2.90.33-freebsd-x86_64",
       "media_type": "application/octet-stream",
-      "sha256": "6a60349bc512743fc7a5128b459dd781a8a6cc9932f6d367ddab239487dd6a1c",
+      "sha256": "db1116bf475ddd96861f0034569bda0ee290fe9187d5a394f050bc0fa3e28031",
       "size": 8913090
     },
     "ios": {
-      "filename": "ailinux-helper-2.90.30-ios-unsigned.ipa",
+      "filename": "ailinux-helper-2.90.33-ios-unsigned.ipa",
       "media_type": "application/octet-stream",
-      "sha256": "a7f239558b9f5d9d73889427280d06a24490f941520a53671074fcb99769a88c",
-      "size": 7094361
+      "sha256": "ae0d43abfd2c8b341cc62eb343cb171a05b9816501d1933dc6971f1aea843f41",
+      "size": 7097358
     },
     "ios-simulator": {
-      "filename": "ailinux-helper-2.90.30-ios-simulator.app.zip",
+      "filename": "ailinux-helper-2.90.33-ios-simulator.app.zip",
       "media_type": "application/zip",
-      "sha256": "f9d9ab2b882d33133acca05e8de2aa08f726d19c10a4efa009994017c3cc78da",
-      "size": 7096299
+      "sha256": "7777ddf45b5998eda86cdf48cfa51eb9a59ad5b0f732969e055ef21c2504d925",
+      "size": 7099021
     },
     "linux-appimage": {
-      "filename": "AILinux-Helper-2.90.30-linux-x86_64.AppImage",
+      "filename": "AILinux-Helper-2.90.33-linux-x86_64.AppImage",
       "media_type": "application/vnd.appimage",
-      "sha256": "3673764c39f28001804b633eba11e9fe72766792c909b952632f77dab6e4ce99",
-      "size": 124920945
+      "sha256": "8f62b0e4516630ae0ff58d5813801bbc99b7638ec6376995b775a110ccc5b4f2",
+      "size": 124920941
     },
     "linux-binary": {
-      "filename": "ailinux-helper-2.90.30-linux-x86_64",
+      "filename": "ailinux-helper-2.90.33-linux-x86_64",
       "media_type": "application/octet-stream",
-      "sha256": "00457d2f137873371aa499b0f6d5aa403e3449c464b3e0b1f19a855454ef3045",
+      "sha256": "33d9215e7e5f62bfd4721d3720ecd57c8f536498de8c347c00ad53a3967fa5f2",
       "size": 8978616
     },
     "linux-deb": {
-      "filename": "AILinux-Helper-2.90.30-linux-amd64.deb",
+      "filename": "AILinux-Helper-2.90.33-linux-amd64.deb",
       "media_type": "application/vnd.debian.binary-package",
-      "sha256": "6ada8131ed89c1ce34c97877de3e9bcdc8d00c518abdac1fb1ae8e231d2e3b72",
-      "size": 98822820
+      "sha256": "9a4016cf9ed5e789ec716285cf7845921537b14642b5f76556223339de4c7b41",
+      "size": 98823172
     },
     "macos": {
-      "filename": "AILinux-Helper-2.90.30-mac-arm64.dmg",
+      "filename": "AILinux-Helper-2.90.33-mac-arm64.dmg",
       "media_type": "application/x-apple-diskimage",
-      "sha256": "ce719518d66679002d7cec781d9299b8f531edbf809935f336a2e7ce8b31c905",
-      "size": 127503006
+      "sha256": "22b537521112efda8e8f89bd2264f496a9c1d9185c1283d504ec724a691fee0d",
+      "size": 127503076
     },
     "macos-pkg": {
-      "filename": "ailinux-helper-2.90.30-macos.pkg",
+      "filename": "ailinux-helper-2.90.33-macos.pkg",
       "media_type": "application/vnd.apple.installer+xml",
-      "sha256": "cf87557b01b6daa9de23d10172fc097fbe026af3df9cc2b45c34116956aba7e9",
-      "size": 15835431
+      "sha256": "51409f9df61f05142b03d4e445f32b43330ff368019640e58e435767bc9e2988",
+      "size": 15843929
     },
     "macos-universal": {
-      "filename": "ailinux-helper-2.90.30-macos-universal",
+      "filename": "ailinux-helper-2.90.33-macos-universal",
       "media_type": "application/octet-stream",
-      "sha256": "b6dceb176b5dd2caa51509d53b917b2c64038956e4f0e6cf8f9ac029c4f875f1",
-      "size": 17971378
+      "sha256": "9f973967cc367e006c4705b058a12823319cb1ea9c1dd06b3299244d09af09f2",
+      "size": 17987890
     },
     "openbsd": {
-      "filename": "ailinux-helper-2.90.30-openbsd-x86_64",
+      "filename": "ailinux-helper-2.90.33-openbsd-x86_64",
       "media_type": "application/octet-stream",
-      "sha256": "243bc961bb6e360d15a15446da58b5b0aaa56645f48200edb1028232952b786a",
-      "size": 8929592
+      "sha256": "8c3a60d030f8c32575830edd9012de8a02fb93c591f7be2f47a5c22fd1b7b575",
+      "size": 8933688
     },
     "windows": {
-      "filename": "AILinux-Helper-2.90.30-win-x64.exe",
+      "filename": "AILinux-Helper-2.90.33-win-x64.exe",
       "media_type": "application/vnd.microsoft.portable-executable",
-      "sha256": "5eb2299f3ea1d4d528772900b69bf67ea508cc864d07e7f6af67526bbe0ca42c",
-      "size": 111565437
+      "sha256": "0a5269090fb15efd63d38b05b69072d2dce7a1a5a9ef5fa44672310e5910a01e",
+      "size": 111565478
     },
     "windows-capsule": {
-      "filename": "ailinux-helper-2.90.30-windows-x86_64.exe",
+      "filename": "ailinux-helper-2.90.33-windows-x86_64.exe",
       "media_type": "application/vnd.microsoft.portable-executable",
-      "sha256": "3b3c0dba17c00833ebf50332ad7aa3304572d33a6cb7c08429830891feb93c52",
-      "size": 9045504
+      "sha256": "51444b41e6b5343ae256ed32828179bd781592c4d32797a97d37fa658f9fe5dc",
+      "size": 9046528
     }
   },
-  "helper_version": "2.90.30",
+  "helper_version": "2.90.33",
   "schema_version": 1,
-  "source_tag": "v2.90.30",
+  "source_tag": "v2.90.33",
   "webmcp": {
     "pyodide": {
       "base_path": "/v1/mcp/pyodide/v314.0.6/",
