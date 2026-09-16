@@ -130,7 +130,7 @@ public class WorkspaceService extends Service implements ProtocolClient.Listener
     }
 
     @Override public IBinder onBind(Intent intent){return null;}
-    @Override public void onState(String value){getSystemService(NotificationManager.class).notify(8606,notification(value));sendBroadcast(new Intent("me.ailinux.workspace.STATE").setPackage(getPackageName()).putExtra("state",value));}
+    @Override public void onState(String value){BugReporter.log("workspace_state",value);getSystemService(NotificationManager.class).notify(8606,notification(value));sendBroadcast(new Intent("me.ailinux.workspace.STATE").setPackage(getPackageName()).putExtra("state",value));}
     @Override public void onResumeToken(String token){}
     // P0: the pairing credential must never reach the notification shade. A
     // notification is mirrored to the lock screen, Notification History and

@@ -1,0 +1,9 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Report a problem</title><style>
+body{font:15px system-ui;background:#071018;color:#e6edf3;margin:0;padding:24px}h1{font-size:22px;margin:0 0 8px}p{color:#9da7b3;line-height:1.45}textarea{box-sizing:border-box;width:100%;min-height:180px;background:#0d1722;color:#e6edf3;border:1px solid #334155;border-radius:8px;padding:12px;resize:vertical}button{margin-top:14px;margin-right:8px;padding:10px 16px;border:0;border-radius:7px;cursor:pointer}#submit{background:#238636;color:white}#cancel{background:#30363d;color:white}#status{min-height:24px;color:#79c0ff}</style></head><body>
+<h1>Report a problem</h1><p>AILinux Helper sends redacted application diagnostics to <b>bugs@ailinux.me</b>. Workspace files, clipboard and screen contents are not attached.</p>
+<textarea id="message" maxlength="8000" placeholder="What happened? What were you doing just before it happened?"></textarea><div><button id="submit">Submit diagnostics</button><button id="cancel">Cancel</button></div><p id="status"></p>
+<script>
+const submit=document.getElementById('submit'),status=document.getElementById('status');
+submit.onclick=async()=>{submit.disabled=true;status.textContent='Submitting…';try{const r=await window.ailinuxBugReport.submit(document.getElementById('message').value);status.textContent=r.ok?'Report submitted.':(r.queued?'Offline/server unavailable — report queued for retry.':'Could not submit report.');if(r.ok)setTimeout(()=>window.ailinuxBugReport.close(),700);}catch(e){status.textContent='Could not submit report.';}finally{submit.disabled=false;}};
+document.getElementById('cancel').onclick=()=>window.ailinuxBugReport.close();
+</script></body></html>
