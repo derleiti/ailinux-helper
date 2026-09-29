@@ -6,6 +6,7 @@ from pathlib import Path
 
 ARTIFACTS = {
     "android": ("AILinux-Helper-{v}-android.apk", "application/vnd.android.package-archive"),
+    "android-tv": ("AILinux-Helper-{v}-android-tv.apk", "application/vnd.android.package-archive"),
     "android-arm64": ("ailinux-helper-{v}-android-arm64", "application/octet-stream"),
     "linux-appimage": ("AILinux-Helper-{v}-linux-x86_64.AppImage", "application/vnd.appimage"),
     "linux-deb": ("AILinux-Helper-{v}-linux-amd64.deb", "application/vnd.debian.binary-package"),

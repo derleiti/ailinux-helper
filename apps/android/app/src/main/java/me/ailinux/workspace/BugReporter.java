@@ -11,8 +11,10 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
@@ -134,7 +136,8 @@ final class BugReporter {
     private static JSONObject basePayload(String event,String delivery)throws Exception{
         JSONObject payload=new JSONObject();
         payload.put("app","AILinux Helper"); payload.put("repo","ailinux-helper"); payload.put("version",versionName());
-        payload.put("platform","android"); payload.put("os_version",Build.VERSION.RELEASE+" (API "+Build.VERSION.SDK_INT+")");
+        boolean tv=context.getPackageManager().hasSystemFeature("android.software.leanback");
+        payload.put("platform",tv?"android-tv":"android"); payload.put("os_version",Build.VERSION.RELEASE+" (API "+Build.VERSION.SDK_INT+")");
         payload.put("arch",Build.SUPPORTED_ABIS.length>0?Build.SUPPORTED_ABIS[0]:""); payload.put("channel",isDebuggable()?"debug":"release");
         payload.put("event_type",event); payload.put("delivery",delivery); payload.put("install_id",installId());
         payload.put("logs",collectLogs());
@@ -163,7 +166,7 @@ final class BugReporter {
         ArrayDeque<String> lines=new ArrayDeque<>();
         File file=logFile();
         if(file!=null&&file.isFile()){
-            try(BufferedReader br=new BufferedReader(new FileReader(file,StandardCharsets.UTF_8))){
+            try(BufferedReader br=new BufferedReader(new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8))){
                 String line; while((line=br.readLine())!=null){lines.addLast(redact(line));while(lines.size()>MAX_LOG_LINES)lines.removeFirst();}
             }catch(Exception ignored){}
         }
@@ -178,7 +181,7 @@ final class BugReporter {
         try{
             File file=logFile(); if(file==null)return; File parent=file.getParentFile(); if(parent!=null)parent.mkdirs();
             if(file.exists()&&file.length()>MAX_LOG_BYTES){File old=new File(file.getParentFile(),"helper-runtime.previous.jsonl");if(old.exists())old.delete();file.renameTo(old);}
-            try(FileWriter fw=new FileWriter(file,StandardCharsets.UTF_8,true)){fw.write(line);fw.write('\n');}
+            try(OutputStreamWriter fw=new OutputStreamWriter(new FileOutputStream(file,true),StandardCharsets.UTF_8)){fw.write(line);fw.write('\n');}
         }catch(Exception ignored){}
     }
 
@@ -195,14 +198,14 @@ final class BugReporter {
     private static JSONArray readPending(){
         try{
             File f=pendingFile(); if(f==null||!f.isFile())return new JSONArray();
-            StringBuilder b=new StringBuilder(); try(BufferedReader br=new BufferedReader(new FileReader(f,StandardCharsets.UTF_8))){String line;while((line=br.readLine())!=null)b.append(line);}
+            StringBuilder b=new StringBuilder(); try(BufferedReader br=new BufferedReader(new InputStreamReader(new FileInputStream(f),StandardCharsets.UTF_8))){String line;while((line=br.readLine())!=null)b.append(line);}
             return new JSONArray(b.toString());
         }catch(Exception e){return new JSONArray();}
     }
 
     private static void writePending(JSONArray queue)throws Exception{
         File f=pendingFile(); if(f==null)return; File parent=f.getParentFile(); if(parent!=null)parent.mkdirs();
-        File tmp=new File(f.getAbsolutePath()+".tmp"); try(FileWriter fw=new FileWriter(tmp,StandardCharsets.UTF_8,false)){fw.write(queue.toString());}
+        File tmp=new File(f.getAbsolutePath()+".tmp"); try(OutputStreamWriter fw=new OutputStreamWriter(new FileOutputStream(tmp,false),StandardCharsets.UTF_8)){fw.write(queue.toString());}
         if(f.exists()&&!f.delete())throw new IllegalStateException("could not replace pending report queue");
         if(!tmp.renameTo(f))throw new IllegalStateException("could not commit pending report queue");
     }

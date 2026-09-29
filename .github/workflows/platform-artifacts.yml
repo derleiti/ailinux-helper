@@ -273,7 +273,7 @@ jobs:
           if-no-files-found: error
 
   android:
-    name: Android APK + native arm64 capsule
+    name: Android + Android TV APKs + native arm64 capsule
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -301,13 +301,21 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.10.2'
-      - name: Build Android capsule and APK
+      - name: Build native Helper Android targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/android
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :tvapp:assembleDebug :app:lintDebug :tvapp:lintDebug
+      - name: Build Android capsule and collect APKs
         shell: bash
         run: |
           set -euo pipefail
           repo="${GITHUB_REPOSITORY##*/}"; version="${GITHUB_REF_NAME#v}"; [[ "$GITHUB_REF_TYPE" == tag ]] || version="0.${GITHUB_RUN_NUMBER}.${GITHUB_SHA::8}"
           safe=$(printf '%s' "$repo"|tr -cd '[:alnum:]'|tr '[:upper:]' '[:lower:]')
           mkdir -p .platform-capsule dist android-capsule/app/src/main/java/me/ailinux/capsule android-capsule/app/src/main/assets
+          cp apps/android/app/build/outputs/apk/debug/app-debug.apk "dist/AILinux-Helper-$version-android-debug.apk"
+          cp apps/android/tvapp/build/outputs/apk/debug/tvapp-debug.apk "dist/AILinux-Helper-$version-android-tv-debug.apk"
           git archive --format=tar.gz -o .platform-capsule/payload.tar.gz HEAD
           cp .platform-capsule/payload.tar.gz android-capsule/app/src/main/assets/project-source.tar.gz
           cat > .platform-capsule/main.go <<'GO'

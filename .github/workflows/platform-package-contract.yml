@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [linux, windows, macos, freebsd, android, ios]
+        platform: [linux, windows, macos, freebsd, android, android-tv, ios]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -46,7 +46,8 @@ jobs:
             ailinux-helper:linux) support=supported; artifact='AppImage + deb'; reason='Electron desktop target.' ;;
             ailinux-helper:windows) support=supported; artifact='NSIS + portable exe'; reason='Electron desktop target.' ;;
             ailinux-helper:macos) support=supported; artifact='dmg + zip'; reason='Electron desktop target.' ;;
-            ailinux-helper:android) support=supported; artifact='APK'; reason='Native Android Helper target.' ;;
+            ailinux-helper:android) support=supported; artifact='APK'; reason='Native Android phone/tablet Helper target.' ;;
+            ailinux-helper:android-tv) support=supported; artifact='TV APK'; reason='Native Android TV/receiver Helper target with separate package identity.' ;;
             ailinux-loom:linux) support=supported; artifact='AppImage + deb + zipapp'; reason='Loom desktop target.' ;;
             ailinux-loom:windows) support=supported; artifact='PyInstaller exe + portable zip'; reason='Loom desktop target.' ;;
             ailinux-loom:macos) support=supported; artifact='pkg + dmg'; reason='Loom desktop target.' ;;
@@ -70,7 +71,7 @@ jobs:
               'support': support,
               'artifact_kind': artifact,
               'reason': reason,
-              'native_binary': support == 'supported' and platform not in {'android'} or (support == 'supported' and platform == 'android'),
+              'native_binary': support == 'supported' and platform not in {'android', 'android-tv'} or (support == 'supported' and platform in {'android', 'android-tv'}),
           }
           with open(f'platform-contract/{platform}.json', 'w') as f:
               json.dump(data, f, indent=2, sort_keys=True)

@@ -361,6 +361,32 @@ test('android remote control is accessibility-gated and fail-closed', () => {
   assert.doesNotMatch(control, /Runtime\.getRuntime|ProcessBuilder|Termux|\/bin\/sh/);
 });
 
+test('android TV control tolerates Leanback and Compose accessibility metadata gaps', () => {
+  const control = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/DeviceControlService.java'), 'utf8');
+  assert.match(control, /case "key"/);
+  assert.match(control, /case "DPAD_CENTER"/);
+  assert.match(control, /performAction\(AccessibilityNodeInfo\.ACTION_CLICK\)/);
+  assert.match(control, /performAction\(AccessibilityNodeInfo\.ACTION_SELECT\)/);
+  assert.match(control, /spatialFocusCandidate/);
+  assert.match(control, /ACTION_ACCESSIBILITY_FOCUS/);
+  assert.match(control, /center_gesture/);
+  assert.match(control, /invoke_strategy/);
+  assert.match(control, /focus_strategy/);
+  assert.doesNotMatch(control, /current\.isClickable\(\) && current\.performAction/);
+});
+
+test('android TV remote profile covers the physical Vodafone remote safely', () => {
+  const control = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/DeviceControlService.java'), 'utf8');
+  for (const key of ['EXIT','TV','MENU','GUIDE','SEARCH','VOLUME_UP','VOLUME_DOWN','MUTE','CHANNEL_UP','CHANNEL_DOWN','MEDIA_PLAY_PAUSE','MEDIA_REWIND','MEDIA_FAST_FORWARD','RECORD','PROG_RED','PROG_GREEN','PROG_YELLOW','PROG_BLUE']) {
+    assert.match(control, new RegExp('\\"' + key + '\\"'));
+  }
+  assert.match(control, /adjustStreamVolume/);
+  assert.match(control, /dispatchMediaKeyEvent/);
+  assert.match(control, /remote_strategy/);
+  assert.match(control, /exit_back_chain|exit_to_live_tv/);
+  assert.match(control, /com\.vodafone\.vtv\.avsb/);
+});
+
 test('android display control grant mirrors actual accessibility readiness', () => {
   const protocol = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/ProtocolClient.java'), 'utf8');
   assert.match(protocol, /boolean controlRequested=state\.computerControl\(\)/);

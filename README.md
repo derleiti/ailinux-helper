@@ -4,6 +4,8 @@
 
 **Current release: 2.90.30** · Android · Linux · Windows · macOS · Browser/PWA fallback.
 
+**Development line: 2.90.37** adds the dedicated Android TV target (`me.ailinux.workspace.tv`) while keeping the phone/tablet Android app separate.
+
 AILinux Helper is the endpoint companion for TriForce and Loom. It exposes only the local capabilities a user explicitly shares and keeps device execution separate from the remote control plane.
 
 ## Current release artifacts
@@ -32,10 +34,13 @@ The Android signing identity is kept outside Git. GitHub CI builds/tests every p
 ## Source layout
 
 ```text
-apps/desktop/   Electron desktop helper
-apps/android/   Native Android foreground executor
-features/       Reusable capability manifests
-assets/         Shared branding/platform assets
+apps/desktop/       Electron desktop helper for Linux/Windows/macOS
+apps/android/app/    Native Android phone/tablet foreground executor
+apps/android/tvapp/  Native Android TV / receiver helper (separate package ID)
+apps/web/           Browser/PWA executor and handoff surface
+apps/ios/           iOS target notes / compatibility planning
+features/           Reusable capability manifests
+assets/             Shared branding/platform assets
 ```
 
 ## Development
@@ -49,7 +54,17 @@ npm run check
 npm run dist:linux   # or dist:win / dist:mac on matching runners
 ```
 
-Android uses the Gradle project under `apps/android/` and requires an Android SDK. Production signing material must never be committed.
+Android and Android TV share the Gradle project under `apps/android/` and the common Java/runtime sources. The targets stay installable side-by-side:
+
+```bash
+cd apps/android
+./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :tvapp:assembleDebug :app:lintDebug :tvapp:lintDebug
+```
+
+- Android package: `me.ailinux.workspace`
+- Android TV package: `me.ailinux.workspace.tv`
+
+Production signing material must never be committed. Tagged CI builds both APK targets with the same trusted signing contract.
 
 ## Public MCP entry point
 

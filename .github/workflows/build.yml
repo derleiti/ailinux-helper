@@ -114,7 +114,7 @@ jobs:
           "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;34.0.0"
       - uses: gradle/actions/setup-gradle@v6
       - name: Compile and test Android helper
-        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :tvapp:assembleDebug :app:lintDebug :tvapp:lintDebug
       - name: Detect production signing for tagged releases
         id: signing
         if: startsWith(github.ref, 'refs/tags/v')
@@ -134,7 +134,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') && steps.signing.outputs.available == 'true'
         env:
           AILINUX_ANDROID_KEYSTORE: ${{ runner.temp }}/ailinux-release.jks
-        run: ./gradlew --no-daemon :app:assembleRelease
+        run: ./gradlew --no-daemon :app:assembleRelease :tvapp:assembleRelease
       - name: Verify and upload signed Android APK
         if: startsWith(github.ref, 'refs/tags/v') && steps.signing.outputs.available == 'true'
         env:
@@ -144,13 +144,17 @@ jobs:
         run: |
           set -euo pipefail
           apk=app/build/outputs/apk/release/app-release.apk
+          tv_apk=tvapp/build/outputs/apk/release/tvapp-release.apk
           test -s "$apk"
+          test -s "$tv_apk"
           expected_alias="${AILINUX_ANDROID_KEY_ALIAS:-ailinux-workspace}"
           keytool -list -v -keystore "$AILINUX_ANDROID_KEYSTORE" -alias "$expected_alias" -storepass "$AILINUX_ANDROID_STORE_PASSWORD" | grep -E 'Alias name:|SHA256:'
           out="AILinux-Helper-${GITHUB_REF_NAME#v}-android.apk"
+          tv_out="AILinux-Helper-${GITHUB_REF_NAME#v}-android-tv.apk"
           cp "$apk" "$out"
-          sha256sum "$out" > SHA256SUMS-android.txt
-          gh release upload "$GITHUB_REF_NAME" "$out" SHA256SUMS-android.txt --repo "$GITHUB_REPOSITORY" --clobber
+          cp "$tv_apk" "$tv_out"
+          sha256sum "$out" "$tv_out" > SHA256SUMS-android.txt
+          gh release upload "$GITHUB_REF_NAME" "$out" "$tv_out" SHA256SUMS-android.txt --repo "$GITHUB_REPOSITORY" --clobber
 
   release-check:
     name: Verify Helper release
@@ -189,6 +193,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           escaped_version="${version//./\\.}"
           grep -Eq "^AILinux-Helper-${escaped_version}-android\.apk$" <<<"$assets"
+          grep -Eq "^AILinux-Helper-${escaped_version}-android-tv\.apk$" <<<"$assets"
           grep -Eq '^SHA256SUMS-android\.txt$' <<<"$assets"
       - name: Mark fully CI-signed release ready
         if: needs.android.outputs.signing_available == 'true'

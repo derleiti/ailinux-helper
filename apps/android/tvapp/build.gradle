@@ -1,3 +1,4 @@
+
 plugins { id 'com.android.application' }
 
 def releaseKeystore = System.getenv('AILINUX_ANDROID_KEYSTORE')
@@ -26,13 +27,13 @@ android {
     }
 
     defaultConfig {
-        applicationId 'me.ailinux.workspace'
+        applicationId 'me.ailinux.workspace.tv'
         minSdk 26
         targetSdk 35
         versionCode 43
-        versionName '2.90.37'
-        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        versionName '2.90.37-tv'
     }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -40,6 +41,14 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
+    sourceSets {
+        main {
+            java.srcDirs = ['../app/src/main/java', 'src/main/java']
+            res.srcDirs = ['../app/src/main/res', 'src/main/res']
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -50,5 +59,4 @@ dependencies {
     implementation 'androidx.core:core:1.15.0'
     implementation 'androidx.documentfile:documentfile:1.0.1'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    testImplementation 'junit:junit:4.13.2'
 }

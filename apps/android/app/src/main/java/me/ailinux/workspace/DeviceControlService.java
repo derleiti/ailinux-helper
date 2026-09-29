@@ -9,11 +9,16 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.PowerManager;
 import android.app.KeyguardManager;
+import android.media.AudioManager;
 import android.content.Context;
+import android.view.View;
+import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import org.json.JSONObject;
 import org.json.JSONArray;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -26,7 +31,7 @@ public final class DeviceControlService extends AccessibilityService {
     static JSONObject execute(JSONObject args) throws Exception {
         DeviceControlService service = active;
         if (service == null) throw new IllegalStateException("Android accessibility control service is not enabled");
-        String action = args.optString("action", "").trim().toLowerCase();
+        String action = args.optString("action", "").trim().toLowerCase(Locale.ROOT);
         switch (action) {
             case "tap": case "click":
                 service.gesture(args, false);
@@ -44,6 +49,8 @@ public final class DeviceControlService extends AccessibilityService {
                 return service.typeText(args.optString("text", ""));
             case "invoke":
                 return service.invokeTarget(args.optString("target_id", ""));
+            case "key":
+                return service.key(args.optJSONArray("keys"));
             case "back":
                 return service.global(GLOBAL_ACTION_BACK, action);
             case "home":
@@ -60,6 +67,330 @@ public final class DeviceControlService extends AccessibilityService {
     private JSONObject global(int action, String label) throws Exception {
         if (!performGlobalAction(action)) throw new IllegalStateException("Android rejected global action: " + label);
         return new JSONObject().put("ok", true).put("action", label);
+    }
+
+    private JSONObject key(JSONArray keys) throws Exception {
+        if (keys == null || keys.length() == 0) throw new IllegalArgumentException("keys is required for Android key input");
+        JSONObject last = null;
+        for (int i = 0; i < keys.length(); i++) {
+            String raw = keys.optString(i, "").trim();
+            if (raw.isEmpty()) continue;
+            last = keyOne(raw);
+        }
+        if (last == null) throw new IllegalArgumentException("keys contains no supported key names");
+        return last.put("keys", keys);
+    }
+
+    private JSONObject keyOne(String raw) throws Exception {
+        String key = raw.trim().toUpperCase(java.util.Locale.ROOT);
+        if (key.startsWith("KEYCODE_")) key = key.substring("KEYCODE_".length());
+        switch (key) {
+            case "DPAD_UP": case "UP": case "ARROWUP":
+                return moveFocus(View.FOCUS_UP, key);
+            case "DPAD_DOWN": case "DOWN": case "ARROWDOWN":
+                return moveFocus(View.FOCUS_DOWN, key);
+            case "DPAD_LEFT": case "LEFT": case "ARROWLEFT":
+                return moveFocus(View.FOCUS_LEFT, key);
+            case "DPAD_RIGHT": case "RIGHT": case "ARROWRIGHT":
+                return moveFocus(View.FOCUS_RIGHT, key);
+            case "DPAD_CENTER": case "CENTER": case "ENTER": case "RETURN": case "OK":
+                return activateFocused(key);
+            case "BACK": case "ESC": case "ESCAPE":
+                return global(GLOBAL_ACTION_BACK, "back").put("key", key);
+            case "HOME":
+                return global(GLOBAL_ACTION_HOME, "home").put("key", key);
+            case "RECENTS": case "APP_SWITCH":
+                return global(GLOBAL_ACTION_RECENTS, "recents").put("key", key);
+            case "NOTIFICATIONS":
+                return global(GLOBAL_ACTION_NOTIFICATIONS, "notifications").put("key", key);
+            case "EXIT":
+                return exitTv(key);
+            case "TV": case "LIVE_TV":
+                return openTvApp(key);
+            case "MENU": case "OPTIONS":
+                return semanticRemoteAction(key, new String[]{"Menü", "Menu", "Weitere Optionen", "Options"});
+            case "GUIDE": case "TV_GUIDE":
+                return semanticRemoteAction(key, new String[]{"TV-Guide", "Guide", "Programm"});
+            case "SEARCH":
+                return semanticRemoteAction(key, new String[]{"Suche", "Suchen", "Search"});
+            case "VOLUME_UP": case "VOL_UP":
+                return adjustVolume(AudioManager.ADJUST_RAISE, key);
+            case "VOLUME_DOWN": case "VOL_DOWN":
+                return adjustVolume(AudioManager.ADJUST_LOWER, key);
+            case "VOLUME_MUTE": case "MUTE":
+                return adjustVolume(AudioManager.ADJUST_TOGGLE_MUTE, key);
+            case "CHANNEL_UP": case "CH_UP":
+                return semanticRemoteAction(key, new String[]{"Kanal +", "CH+", "Channel up", "Nächster Sender"});
+            case "CHANNEL_DOWN": case "CH_DOWN":
+                return semanticRemoteAction(key, new String[]{"Kanal -", "CH-", "Channel down", "Vorheriger Sender"});
+            case "MEDIA_PLAY_PAUSE": case "PLAY_PAUSE":
+                return dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, key);
+            case "MEDIA_REWIND": case "REWIND":
+                return dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_REWIND, key);
+            case "MEDIA_FAST_FORWARD": case "FAST_FORWARD":
+                return dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, key);
+            case "RECORD":
+                return semanticRemoteAction(key, new String[]{"Aufnehmen", "Aufnahme", "Record"});
+            case "PROG_RED": case "RED":
+                return semanticRemoteAction(key, new String[]{"Rot", "Red"});
+            case "PROG_GREEN": case "GREEN":
+                return semanticRemoteAction(key, new String[]{"Grün", "Green"});
+            case "PROG_YELLOW": case "YELLOW":
+                return semanticRemoteAction(key, new String[]{"Gelb", "Yellow"});
+            case "PROG_BLUE": case "BLUE":
+                return semanticRemoteAction(key, new String[]{"Blau", "Blue"});
+            case "TAB":
+                return moveFocus(View.FOCUS_FORWARD, key);
+            default:
+                if (key.length() == 1 && Character.isDigit(key.charAt(0))) return digitKey(key);
+                throw new IllegalArgumentException("unsupported Android key: " + raw);
+        }
+    }
+
+    private JSONObject moveFocus(int direction, String key) throws Exception {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) throw new IllegalStateException("no active accessibility window");
+        AccessibilityNodeInfo current = null;
+        AccessibilityNodeInfo next = null;
+        try {
+            current = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+            if (current == null) current = findFocusedNode(root);
+            if (current == null) current = findFirstFocusable(root);
+            if (current == null) throw new IllegalStateException("no focusable Android TV element is available");
+            next = current.focusSearch(direction);
+            String strategy = "focus_search";
+            if (next == null) {
+                next = spatialFocusCandidate(root, current, direction);
+                strategy = "spatial_fallback";
+            }
+            if (next == null) throw new IllegalStateException("no focus target in requested direction: " + key);
+            boolean focused = next.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
+            if (!focused) focused = next.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
+            if (!focused) throw new IllegalStateException("Android rejected focus move: " + key);
+            return new JSONObject().put("ok", true).put("action", "key").put("key", key)
+                    .put("focus_moved", true).put("focus_strategy", strategy);
+        } finally {
+            if (next != null) next.recycle();
+            if (current != null) current.recycle();
+            root.recycle();
+        }
+    }
+
+    private JSONObject activateFocused(String key) throws Exception {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) throw new IllegalStateException("no active accessibility window");
+        AccessibilityNodeInfo current = null;
+        try {
+            current = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+            if (current == null) current = findFocusedNode(root);
+            if (current == null) throw new IllegalStateException("no focused Android TV element is available");
+            String strategy = activateNode(current);
+            if (strategy == null) throw new IllegalStateException("focused Android TV element is not invokable");
+            return new JSONObject().put("ok", true).put("action", "key").put("key", key)
+                    .put("invoked", true).put("invoke_strategy", strategy);
+        } finally {
+            if (current != null) current.recycle();
+            root.recycle();
+        }
+    }
+
+    private static AccessibilityNodeInfo findFocusedNode(AccessibilityNodeInfo node) {
+        if (node == null) return null;
+        if (node.isFocused() || node.isAccessibilityFocused()) return AccessibilityNodeInfo.obtain(node);
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try {
+                AccessibilityNodeInfo found = findFocusedNode(child);
+                if (found != null) return found;
+            } finally {
+                child.recycle();
+            }
+        }
+        return null;
+    }
+
+    private static AccessibilityNodeInfo findFirstFocusable(AccessibilityNodeInfo node) {
+        if (node == null) return null;
+        if (node.isEnabled() && node.isFocusable()) return AccessibilityNodeInfo.obtain(node);
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try {
+                AccessibilityNodeInfo found = findFirstFocusable(child);
+                if (found != null) return found;
+            } finally {
+                child.recycle();
+            }
+        }
+        return null;
+    }
+
+    private static AccessibilityNodeInfo spatialFocusCandidate(AccessibilityNodeInfo root, AccessibilityNodeInfo current, int direction) {
+        Rect origin = new Rect();
+        current.getBoundsInScreen(origin);
+        if (origin.isEmpty()) return null;
+        ArrayList<AccessibilityNodeInfo> candidates = new ArrayList<>();
+        collectFocusCandidates(root, candidates, 0);
+        AccessibilityNodeInfo best = null;
+        long bestScore = Long.MAX_VALUE;
+        int ox = origin.centerX(), oy = origin.centerY();
+        for (AccessibilityNodeInfo candidate : candidates) {
+            if (candidate.equals(current)) { candidate.recycle(); continue; }
+            Rect b = new Rect(); candidate.getBoundsInScreen(b);
+            if (b.isEmpty()) { candidate.recycle(); continue; }
+            int dx = b.centerX() - ox, dy = b.centerY() - oy;
+            int primary, secondary;
+            switch (direction) {
+                case View.FOCUS_UP: primary = -dy; secondary = Math.abs(dx); break;
+                case View.FOCUS_DOWN: primary = dy; secondary = Math.abs(dx); break;
+                case View.FOCUS_LEFT: primary = -dx; secondary = Math.abs(dy); break;
+                case View.FOCUS_RIGHT: primary = dx; secondary = Math.abs(dy); break;
+                default: primary = 1; secondary = Math.abs(dx) + Math.abs(dy); break;
+            }
+            if (primary <= 0) { candidate.recycle(); continue; }
+            long score = (long) primary * 10000L + (long) secondary * 25L + Math.abs((long) dx) + Math.abs((long) dy);
+            if (score < bestScore) {
+                if (best != null) best.recycle();
+                best = candidate; bestScore = score;
+            } else candidate.recycle();
+        }
+        return best;
+    }
+
+    private static void collectFocusCandidates(AccessibilityNodeInfo node, List<AccessibilityNodeInfo> out, int depth) {
+        if (node == null || depth > 18 || out.size() >= 220) return;
+        Rect b = new Rect(); node.getBoundsInScreen(b);
+        boolean candidate = node.isEnabled() && node.isVisibleToUser() && !b.isEmpty() &&
+                (node.isFocusable() || node.isClickable() || node.isEditable() ||
+                 (node.getText() != null && node.getText().length() > 0) ||
+                 (node.getContentDescription() != null && node.getContentDescription().length() > 0));
+        if (candidate) out.add(AccessibilityNodeInfo.obtain(node));
+        for (int i = 0; i < node.getChildCount() && out.size() < 220; i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try { collectFocusCandidates(child, out, depth + 1); } finally { child.recycle(); }
+        }
+    }
+
+    private JSONObject openTvApp(String key) throws Exception {
+        String packageName = "com.vodafone.vtv.avsb";
+        Intent launch = getPackageManager().getLaunchIntentForPackage(packageName);
+        if (launch == null) return global(GLOBAL_ACTION_HOME, "home").put("key", key).put("remote_strategy", "home_fallback");
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(launch);
+        return new JSONObject().put("ok", true).put("action", "key").put("key", key)
+                .put("remote_strategy", "launch_live_tv").put("package", packageName);
+    }
+
+    private JSONObject exitTv(String key) throws Exception {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        String pkg = "";
+        if (root != null) {
+            try {
+                CharSequence p = root.getPackageName();
+                if (p != null) pkg = p.toString();
+            } finally { root.recycle(); }
+        }
+        if (!"com.vodafone.vtv.avsb".equals(pkg)) return openTvApp(key).put("remote_strategy", "exit_to_live_tv");
+        long before = accessibilityEventId;
+        if (!performGlobalAction(GLOBAL_ACTION_BACK)) throw new IllegalStateException("Android rejected EXIT back action");
+        Thread.sleep(140L);
+        if (accessibilityEventId == before) {
+            performGlobalAction(GLOBAL_ACTION_BACK);
+            Thread.sleep(140L);
+        }
+        return new JSONObject().put("ok", true).put("action", "key").put("key", key)
+                .put("remote_strategy", "exit_back_chain");
+    }
+
+    private JSONObject adjustVolume(int direction, String key) throws Exception {
+        AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audio == null) throw new IllegalStateException("Android audio service unavailable");
+        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI);
+        return new JSONObject().put("ok", true).put("action", "key").put("key", key)
+                .put("remote_strategy", "audio_manager");
+    }
+
+    private JSONObject dispatchMediaKey(int keyCode, String key) throws Exception {
+        AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audio == null) throw new IllegalStateException("Android audio service unavailable");
+        long now = android.os.SystemClock.uptimeMillis();
+        audio.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0));
+        audio.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0));
+        return new JSONObject().put("ok", true).put("action", "key").put("key", key)
+                .put("remote_strategy", "media_key_dispatch");
+    }
+
+    private JSONObject semanticRemoteAction(String key, String[] labels) throws Exception {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) throw new IllegalStateException("no active accessibility window");
+        AccessibilityNodeInfo target = null;
+        try {
+            for (String label : labels) {
+                target = findNodeByTextOrDescription(root, label);
+                if (target == null) continue;
+                String strategy = activateNode(target);
+                if (strategy != null) return new JSONObject().put("ok", true).put("action", "key")
+                        .put("key", key).put("remote_strategy", "semantic_" + strategy).put("matched", label);
+                target.recycle(); target = null;
+            }
+        } finally {
+            if (target != null) target.recycle();
+            root.recycle();
+        }
+        throw new IllegalStateException("remote action is not exposed by the current Android TV screen: " + key);
+    }
+
+    private JSONObject digitKey(String digit) throws Exception {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) throw new IllegalStateException("no active accessibility window");
+        AccessibilityNodeInfo focus = null;
+        try {
+            focus = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+            if (focus != null && focus.isEditable()) {
+                CharSequence current = focus.getText();
+                Bundle bundle = new Bundle();
+                bundle.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                        (current == null ? "" : current.toString()) + digit);
+                if (focus.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle))
+                    return new JSONObject().put("ok", true).put("action", "key").put("key", digit)
+                            .put("remote_strategy", "editable_digit");
+            }
+            AccessibilityNodeInfo target = findNodeByTextOrDescription(root, digit);
+            if (target != null) {
+                try {
+                    String strategy = activateNode(target);
+                    if (strategy != null) return new JSONObject().put("ok", true).put("action", "key")
+                            .put("key", digit).put("remote_strategy", "semantic_" + strategy);
+                } finally { target.recycle(); }
+            }
+        } finally {
+            if (focus != null) focus.recycle();
+            root.recycle();
+        }
+        throw new IllegalStateException("digit key is not exposed by the current Android TV screen: " + digit);
+    }
+
+    private static AccessibilityNodeInfo findNodeByTextOrDescription(AccessibilityNodeInfo node, String label) {
+        if (node == null || label == null) return null;
+        String wanted = label.trim();
+        CharSequence text = node.getText();
+        CharSequence desc = node.getContentDescription();
+        if ((text != null && wanted.equalsIgnoreCase(text.toString().trim())) ||
+                (desc != null && desc.toString().toLowerCase(Locale.ROOT).contains(wanted.toLowerCase(Locale.ROOT))))
+            return AccessibilityNodeInfo.obtain(node);
+        List<AccessibilityNodeInfo> hits = node.findAccessibilityNodeInfosByText(label);
+        if (hits != null && !hits.isEmpty()) return AccessibilityNodeInfo.obtain(hits.get(0));
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try {
+                AccessibilityNodeInfo found = findNodeByTextOrDescription(child, label);
+                if (found != null) return found;
+            } finally { child.recycle(); }
+        }
+        return null;
     }
 
     private JSONObject wakeScreen() throws Exception {
@@ -280,8 +611,10 @@ public final class DeviceControlService extends AccessibilityService {
         try {
             target = resolvePath(root, path);
             if (target == null) throw new IllegalStateException("target is no longer present; observe the current scene again");
-            if (!clickNodeOrParent(target)) throw new IllegalStateException("target does not expose an invokable click action");
-            return new JSONObject().put("ok", true).put("action", "invoke").put("target_id", targetId);
+            String strategy = activateNode(target);
+            if (strategy == null) throw new IllegalStateException("target does not expose an invokable click action");
+            return new JSONObject().put("ok", true).put("action", "invoke").put("target_id", targetId)
+                    .put("invoke_strategy", strategy);
         } finally {
             if (target != null && target != root) target.recycle();
             root.recycle();
@@ -394,16 +727,39 @@ public final class DeviceControlService extends AccessibilityService {
     }
 
     private static boolean clickNodeOrParent(AccessibilityNodeInfo node) {
+        return clickNodeOrParentStrategy(node) != null;
+    }
+
+    private static String clickNodeOrParentStrategy(AccessibilityNodeInfo node) {
         AccessibilityNodeInfo current = node;
-        for (int depth = 0; current != null && depth < 6; depth++) {
-            boolean clicked = current.isClickable() && current.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        for (int depth = 0; current != null && depth < 8; depth++) {
+            // Some Leanback/Compose virtual nodes report clickable=false even though
+            // ACTION_CLICK is implemented. Trust the action result, not the metadata bit.
+            boolean clicked = current.performAction(AccessibilityNodeInfo.ACTION_CLICK);
             AccessibilityNodeInfo parent = clicked ? null : current.getParent();
             if (current != node) current.recycle();
-            if (clicked) return true;
+            if (clicked) return depth == 0 ? "action_click" : "parent_action_click";
             current = parent;
         }
         if (current != null && current != node) current.recycle();
-        return false;
+        return null;
+    }
+
+    private String activateNode(AccessibilityNodeInfo node) throws Exception {
+        String clicked = clickNodeOrParentStrategy(node);
+        if (clicked != null) return clicked;
+        if (node.performAction(AccessibilityNodeInfo.ACTION_SELECT)) return "action_select";
+        Rect bounds = new Rect();
+        node.getBoundsInScreen(bounds);
+        if (!bounds.isEmpty()) {
+            try {
+                dispatchLine(bounds.exactCenterX(), bounds.exactCenterY(), bounds.exactCenterX(), bounds.exactCenterY(), 80L);
+                return "center_gesture";
+            } catch (IllegalStateException ignored) {
+                // Preserve fail-closed behavior: only claim success when Android confirms the gesture.
+            }
+        }
+        return null;
     }
 
     private void rebindWorkspaceShare() {

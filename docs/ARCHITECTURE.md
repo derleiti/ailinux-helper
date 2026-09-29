@@ -4,9 +4,10 @@ One cross-platform helper for device-local AILinux capabilities. The shared visu
 ## Layers
 1. Shared API/UI: pairing, durable lease, handoff and visual surface.
 2. Desktop shell: Electron for Linux/Windows/macOS, trusted origin only, tray resident.
-3. Android shell: native foreground service plus SAF filesystem grants.
-4. Feature manifests: reusable capabilities independent of platform shell.
-5. Compatibility: `ailinux-helper://` is canonical; `ailinux-workspace://` remains a legacy alias.
+3. Android shells: one shared runtime with separate install targets for phone/tablet (`app`) and Android TV/receivers (`tvapp`). The TV package uses Leanback/TV launch semantics and TV-oriented remote-control capabilities while reusing the hardened Helper transport/runtime.
+4. Web/PWA shell: browser executor and handoff surface for environments without a native helper.
+5. Feature manifests: reusable capabilities independent of platform shell.
+6. Compatibility: `ailinux-helper://` is canonical; `ailinux-workspace://` remains a legacy alias.
 
 ## Security
 No arbitrary origins, no Node renderer integration, explicit local grants, no durable credentials in public URLs, one-shot handoffs, native local-tool execution, explicit capability declarations for new modules.
@@ -31,3 +32,7 @@ vision, clipboard and compute execution remain gated by the user's share manifes
 The model-facing `/v1/mcp` contract uses the `aihelper_*` namespace for Helper-owned operations. The transport executors intentionally keep accepting/advertising the established wire capabilities (`computer_observe`, `computer_input`, `vision_*`, `clipboard_*`, `compute_execute`, and device/app/process/service/window operations). TriForce translates between the two at the workspace bridge. This gives Android, Linux, Windows and macOS rolling-upgrade compatibility without exposing duplicate schemas to the AI.
 
 `aihelper_pair` owns the share lifecycle at MCP level: `status`, one-time `pair`, durable `reconnect`, and explicit `disconnect`/revoke when the user requests it. Pair/resume secrets remain inside the normal lease protocol; Helper executors do not need a second secret path.
+
+## Android target split
+
+The Android Gradle project is intentionally a multi-app project. `:app` produces the normal Android Helper (`me.ailinux.workspace`) and `:tvapp` produces the Android TV Helper (`me.ailinux.workspace.tv`). Both consume the shared Helper Java/resources where appropriate, but keep independent manifests, launcher behavior and package identities so they can coexist without overwriting one another. Tagged CI must compile, lint and package both targets.
