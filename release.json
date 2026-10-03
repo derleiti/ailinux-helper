@@ -6,7 +6,7 @@
     "android": {
       "filename": "AILinux-Helper-2.90.38-android.apk",
       "media_type": "application/vnd.android.package-archive",
-      "sha256": "0acd61c1c1ba46ad035a86f4a87dd65b0a878b7e6f4aed6eeda35929d71a3492",
+      "sha256": "51d05ff9414155da9e9baa20a37a074b1a4c06d9c998dcc4ad53bace7367ebf0",
       "size": 2212664,
       "version": "2.90.38"
     },
@@ -19,7 +19,7 @@
     "android-tv": {
       "filename": "AILinux-Helper-2.90.38-android-tv.apk",
       "media_type": "application/vnd.android.package-archive",
-      "sha256": "b1f94948cea56551e349200fca09788d0274f2035a8701226ce95f4ccf6db8fc",
+      "sha256": "fb272052c8693d66ac7f6cce62fad8c5685a52e9c190c24d83b011d6f36b0521",
       "size": 2216096,
       "version": "2.90.38"
     },
