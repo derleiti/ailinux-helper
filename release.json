@@ -4,16 +4,24 @@
   },
   "artifacts": {
     "android": {
-      "filename": "AILinux-Helper-2.90.34-android.apk",
+      "filename": "AILinux-Helper-2.90.35-android.apk",
       "media_type": "application/vnd.android.package-archive",
-      "sha256": "0cfe27ed09f52c7b5e57f515f81fde4927711fa971cd0ec293114d605ad6724d",
-      "size": 2203135
+      "sha256": "b442d755ab2bf632593928a2ad355ffea38c6f1f12b76bc2deaf38aeeb7f6b99",
+      "size": 2209066,
+      "version": "2.90.35"
     },
     "android-arm64": {
       "filename": "ailinux-helper-2.90.34-android-arm64",
       "media_type": "application/octet-stream",
       "sha256": "121665a71b1d2e6bfade837b805a432fee3f647a10a2cfc93976b55b20f0689a",
       "size": 1769825
+    },
+    "android-tv": {
+      "filename": "AILinux-Helper-2.90.35-android-tv.apk",
+      "media_type": "application/vnd.android.package-archive",
+      "sha256": "97e9e23a85ae1d5b4ee676509f4fe061938208b36f86434c37fff9db127142bc",
+      "size": 2212276,
+      "version": "2.90.35"
     },
     "arch": {
       "filename": "ailinux-helper-capsule-2.90.34-1-x86_64.pkg.tar.zst",
