@@ -30,8 +30,8 @@ android {
         applicationId 'me.ailinux.workspace.tv'
         minSdk 26
         targetSdk 35
-        versionCode 43
-        versionName '2.90.37-tv'
+        versionCode 44
+        versionName '2.90.38-tv'
     }
 
     buildTypes {

@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 final class ProtocolClient extends WebSocketListener {
     interface Listener { void onState(String state); void onResumeToken(String token); void onPairCode(String code); }
-    static final String VERSION="2.90.37-android";
+    static final String VERSION="2.90.38-android";
     static final String BASE="https://api.ailinux.me";
     private static final String TAG="AILinuxWorkspace";
     private final Context context; private final StateStore state; private final Listener listener;
@@ -67,7 +67,17 @@ final class ProtocolClient extends WebSocketListener {
                 public void onFailure(Call c,IOException e){scheduleReconnect("Resume ticket failed");}
                 public void onResponse(Call c,Response r)throws IOException{
                     try(Response x=r){
-                        if(x.code()==403){connecting.set(false);stopped.set(true);state.clearCredentials();listener.onState("Saved workspace lease expired · tap Generate new Share ID");return;}
+                        if(x.code()==403){
+                            state.clearResumeToken();
+                            if(pair!=null&&!pair.isEmpty()){
+                                listener.onState("Saved workspace lease rotated · retrying the pending Share ID");
+                                requestSocketTicket(pair);
+                            }else{
+                                connecting.set(false);stopped.set(true);
+                                listener.onState("Saved workspace lease expired · tap Generate new Share ID");
+                            }
+                            return;
+                        }
                         if(!x.isSuccessful()){scheduleReconnect("Resume rejected: "+x.code());return;}
                         ResponseBody responseBody=x.body();
                         if(responseBody==null){scheduleReconnect("Resume returned no body");return;}

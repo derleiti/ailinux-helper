@@ -93,8 +93,10 @@ public final class DeviceControlService extends AccessibilityService {
                 return moveFocus(View.FOCUS_LEFT, key);
             case "DPAD_RIGHT": case "RIGHT": case "ARROWRIGHT":
                 return moveFocus(View.FOCUS_RIGHT, key);
-            case "DPAD_CENTER": case "CENTER": case "ENTER": case "RETURN": case "OK":
+            case "DPAD_CENTER": case "CENTER":
                 return activateFocused(key);
+            case "ENTER": case "RETURN": case "OK":
+                return activateFocusedOrIme(key);
             case "BACK": case "ESC": case "ESCAPE":
                 return global(GLOBAL_ACTION_BACK, "back").put("key", key);
             case "HOME":
@@ -174,6 +176,31 @@ public final class DeviceControlService extends AccessibilityService {
             if (current != null) current.recycle();
             root.recycle();
         }
+    }
+
+    private JSONObject activateFocusedOrIme(String key) throws Exception {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) throw new IllegalStateException("no active accessibility window");
+        AccessibilityNodeInfo editable = null;
+        try {
+            editable = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+            if (editable == null || !editable.isEditable()) {
+                if (editable != null) { editable.recycle(); editable = null; }
+                editable = findFocusedEditable(root);
+            }
+            if (editable != null && Build.VERSION.SDK_INT >= 30) {
+                if (!editable.isFocused()) editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
+                int actionId = AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId();
+                if (editable.performAction(actionId)) {
+                    return new JSONObject().put("ok", true).put("action", "key").put("key", key)
+                            .put("invoked", true).put("invoke_strategy", "ime_enter");
+                }
+            }
+        } finally {
+            if (editable != null) editable.recycle();
+            root.recycle();
+        }
+        return activateFocused(key);
     }
 
     private JSONObject activateFocused(String key) throws Exception {

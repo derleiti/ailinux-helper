@@ -41,6 +41,7 @@ final class StateStore {
         credentials.remove("pair_code");
     }
     String resumeToken() { return credentials.get("resume_token"); }
+    void clearResumeToken() { credentials.remove("resume_token"); }
     String machineId() {
         String value = prefs.getString("machine_id", "");
         if (value != null && !value.isEmpty()) return value;

@@ -28,10 +28,10 @@ final class AndroidAppOps {
             case "focus": return launch(context, app, action);
             case "open_url": return openUrl(context, args.optString("url", ""));
             case "update_helper": {
-                boolean tv = context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+                boolean tv = context.getPackageName().endsWith(".tv");
                 String updateUrl = tv
                         ? "https://api.ailinux.me/v1/mcp/helper/android-tv"
-                        : "https://api.ailinux.me/v1/mcp/workspace/android.apk";
+                        : "https://api.ailinux.me/v1/mcp/helper/android";
                 return openUrl(context, updateUrl).put("action", "update_helper").put("platform", tv ? "android-tv" : "android");
             }
             case "close": throw new IllegalArgumentException("Android does not allow a normal app to force-stop another app; use computer_input home/back instead");

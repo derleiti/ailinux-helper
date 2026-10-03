@@ -583,3 +583,42 @@ test('workspace handoff landing is externalized for strict MCP CSP', () => {
   assert.match(js, /location\.hash/);
   assert.match(js, /ailinux-helper:\/\/handoff\?code=/);
 });
+
+test('android helper self-updates only from verified v1/mcp artifacts', () => {
+  const updater = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/AutoUpdater.java'), 'utf8');
+  const appManifest = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/AndroidManifest.xml'), 'utf8');
+  const tvManifest = fs.readFileSync(path.join(__dirname, '../../android/tvapp/src/main/AndroidManifest.xml'), 'utf8');
+  const app = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/MainActivity.java'), 'utf8');
+  const tv = fs.readFileSync(path.join(__dirname, '../../android/tvapp/src/main/java/me/ailinux/workspace/TVMainActivity.java'), 'utf8');
+  assert.match(updater, /https:\/\/api\.ailinux\.me/);
+  assert.match(updater, /isTv\(activity\) \? "android-tv" : "android"/);
+  assert.match(updater, /path\.startsWith\("\/v1\/mcp\/helper\/"\)/);
+  assert.match(updater, /expectedSha\.equals\(sha256\(apk\)\)/);
+  assert.match(updater, /FileProvider\.getUriForFile/);
+  assert.match(appManifest, /android\.permission\.REQUEST_INSTALL_PACKAGES/);
+  assert.match(tvManifest, /android\.permission\.REQUEST_INSTALL_PACKAGES/);
+  assert.match(appManifest, /androidx\.core\.content\.FileProvider/);
+  assert.match(tvManifest, /androidx\.core\.content\.FileProvider/);
+  assert.match(app, /AutoUpdater\.check\(this\)/);
+  assert.match(tv, /AutoUpdater\.check\(this\)/);
+});
+
+test('android ENTER submits focused editable IME before TV click fallback', () => {
+  const control = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/DeviceControlService.java'), 'utf8');
+  assert.match(control, /case "ENTER": case "RETURN": case "OK":\s*\n\s*return activateFocusedOrIme\(key\)/);
+  assert.match(control, /AccessibilityNodeInfo\.AccessibilityAction\.ACTION_IME_ENTER\.getId\(\)/);
+  assert.match(control, /invoke_strategy", "ime_enter"/);
+  const method = control.match(/private JSONObject activateFocusedOrIme\(String key\)[\s\S]*?private JSONObject activateFocused\(String key\)/)?.[0] || '';
+  assert.match(method, /return activateFocused\(key\)/);
+  assert.doesNotMatch(method, /ACTION_CLICK/);
+});
+
+test('android resume rejection preserves a pending one-time Share ID', () => {
+  const store = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/StateStore.java'), 'utf8');
+  const protocol = fs.readFileSync(path.join(__dirname, '../../android/app/src/main/java/me/ailinux/workspace/ProtocolClient.java'), 'utf8');
+  assert.match(store, /void clearResumeToken\(\) \{ credentials\.remove\("resume_token"\); \}/);
+  const resume403 = protocol.match(/if\(x\.code\(\)==403\)\{[\s\S]*?return;\s*\}/)?.[0] || '';
+  assert.match(resume403, /state\.clearResumeToken\(\)/);
+  assert.match(resume403, /requestSocketTicket\(pair\)/);
+  assert.doesNotMatch(resume403, /clearCredentials\(\)/);
+});

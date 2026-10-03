@@ -53,6 +53,7 @@ public final class TVMainActivity extends Activity {
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 4102);
             }
             refresh();
+            AutoUpdater.check(this);
         } catch (Throwable error) {
             showFatal(error);
         }
@@ -74,6 +75,7 @@ public final class TVMainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        AutoUpdater.resume(this);
         try {
             IntentFilter filter = new IntentFilter("me.ailinux.workspace.STATE");
             ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);

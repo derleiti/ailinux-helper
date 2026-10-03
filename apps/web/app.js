@@ -5,7 +5,7 @@ const WRITE_TOOLS=['file_edit','directory_create','workspace_clear','code_edit']
 const HELPER_DEVICE_TOOLS=['computer_observe','computer_screenshot','vision_start','vision_status','vision_observe','vision_stop','clipboard_read','clipboard_write','device_info','process_ops','service_ops','app_ops','window_ops','computer_input','device_control','compute_execute'];
 const IGNORE=new Set(['.git','.venv','node_modules','__pycache__','.pytest_cache','.mypy_cache']);
 const MAX_TEXT=2*1024*1024;
-const EXECUTOR_VERSION='2.90.37-browser';
+const EXECUTOR_VERSION='2.90.38-browser';
 const BUG_ENDPOINT='/v1/bugs/report',BUG_LOG_KEY='ailinux_helper_bug_log_v1',BUG_QUEUE_KEY='ailinux_helper_bug_queue_v1',BUG_INSTALL_KEY='ailinux_helper_bug_install_v1';
 function bugRedact(value){let s=String(value??'');s=s.replace(/(authorization\s*[:=]\s*(?:bearer\s+)?)[^\s,;]+/gi,'$1[REDACTED]').replace(/((?:api[_-]?key|token|secret|password|passwd|resume[_-]?token|pair[_-]?code)\s*[:=]\s*)[^\s,;]+/gi,'$1[REDACTED]').replace(/\b[A-F0-9]{4}(?:-[A-F0-9]{4}){5}\b/gi,'[REDACTED]').replace(/([?&](?:token|key|secret|password|code)=)[^&#\s]+/gi,'$1[REDACTED]');return s.slice(0,48000)}
 function bugScrub(value,depth=0){if(depth>8)return '[TRUNCATED]';if(Array.isArray(value))return value.slice(0,250).map(v=>bugScrub(v,depth+1));if(value&&typeof value==='object'){const out={};for(const [k,v] of Object.entries(value).slice(0,200)){const n=k.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');out[k.slice(0,128)]=/^(authorization|api_key|apikey|token|access_token|refresh_token|secret|password|passwd|resume_token|workspace_token|pair_code)$/.test(n)?'[REDACTED]':bugScrub(v,depth+1)}return out}return typeof value==='string'?bugRedact(value):value}
