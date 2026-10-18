@@ -3,9 +3,9 @@
 /**
  * KDE Plasma 6 Wayland window manager adapter.
  * Executes only a fixed KWin script (no caller-provided code), and returns
- * its tagged result from the user's journal. Mutations remain MCP-gated.
+ * its result over a unique, nonce-bound D-Bus reply endpoint. Mutations remain MCP-gated.
  */
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -27,7 +27,7 @@ function available({ env = process.env, platform = process.platform } = {}) {
   const wayland = String(env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' || Boolean(env.WAYLAND_DISPLAY);
   return platform === 'linux' && kde && wayland
     && Boolean(executable('qdbus6', env) || executable('qdbus', env))
-    && Boolean(executable('journalctl', env));
+    && fs.existsSync('/usr/bin/python3');
 }
 
 function run(file, args, timeout = 5000) {
@@ -42,7 +42,7 @@ function run(file, args, timeout = 5000) {
   });
 }
 
-function buildScript(spec, marker) {
+function buildScript(spec, marker, nonce = 'test') {
   const safe = {
     action: String(spec.action || 'list').slice(0, 20),
     id: String(spec.id || '').slice(0, 128),
@@ -53,6 +53,7 @@ function buildScript(spec, marker) {
     '(function () {',
     '  const spec = ' + JSON.stringify(safe) + ';',
     '  const marker = ' + JSON.stringify(marker) + ';',
+    '  const finish = result => callDBus(' + JSON.stringify('me.ailinux.KWinHelper.n' + nonce) + ', ' + JSON.stringify('/me/ailinux/KWinHelper') + ', ' + JSON.stringify('me.ailinux.KWinHelper') + ', ' + JSON.stringify('Result') + ', ' + JSON.stringify(nonce) + ', JSON.stringify(result));',
     '  try {',
     '    const wins = workspace.windowList().filter(w => w && !w.deleted && !w.specialWindow);',
     '    const data = w => ({ id: String(w.internalId || ""), title: String(w.caption || ""),',
@@ -62,7 +63,7 @@ function buildScript(spec, marker) {
     '      return (!spec.id || d.id === spec.id) && (!spec.title || d.title.toLowerCase().includes(spec.title.toLowerCase()));',
     '    });',
     '    if (spec.action === "list") {',
-    '      print(marker + JSON.stringify({ ok:true, windows:matches.slice(0,spec.limit).map(data), truncated:matches.length > spec.limit }));',
+    '      finish({ ok:true, windows:matches.slice(0,spec.limit).map(data), truncated:matches.length > spec.limit });',
     '      return;',
     '    }',
     '    if (!spec.id && !spec.title) throw new Error("window_id or title required");',
@@ -76,9 +77,9 @@ function buildScript(spec, marker) {
     '      if (!win.closeable) throw new Error("window is not closeable");',
     '      win.closeWindow();',
     '    } else throw new Error("unsupported action");',
-    '    print(marker + JSON.stringify({ ok:true, action:spec.action, window:data(win) }));',
+    '    finish({ ok:true, action:spec.action, window:data(win) });',
     '  } catch (error) {',
-    '    print(marker + JSON.stringify({ ok:false, error:String(error && error.message || error) }));',
+    '    finish({ ok:false, error:String(error && error.message || error) });',
     '  }',
     '})();',
     '',
@@ -97,6 +98,61 @@ function parseOutput(stdout, marker) {
   return null;
 }
 
+function bridgePath() {
+  const shipped = process.resourcesPath ? path.join(process.resourcesPath, 'kwin_dbus_reply.py') : '';
+  if (shipped && fs.existsSync(shipped)) return shipped;
+  return path.join(__dirname, 'kwin_dbus_reply.py');
+}
+
+function startReply(nonce) {
+  const child = spawn('/usr/bin/python3', [bridgePath(), nonce], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let buffer = '', stderr = '';
+  let readyResolve, readyReject, resultResolve, resultReject;
+  let isReady = false, done = false;
+  const ready = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
+  const result = new Promise((resolve, reject) => { resultResolve = resolve; resultReject = reject; });
+  // Avoid an unhandled-rejection race if the child exits before anyone awaits result.
+  result.catch(() => {});
+  const timer = setTimeout(() => {
+    const err = new Error('KWin D-Bus result timed out');
+    if (!isReady) readyReject(err);
+    if (!done) resultReject(err);
+    child.kill();
+  }, 12000);
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', chunk => {
+    buffer += chunk;
+    while (buffer.includes('\n')) {
+      const idx = buffer.indexOf('\n');
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      let msg; try { msg = JSON.parse(line); } catch { continue; }
+      if (msg.type === 'ready') { isReady = true; readyResolve(); }
+      else if (msg.type === 'result' && !done) {
+        done = true;
+        try { resultResolve(JSON.parse(msg.payload)); } catch { resultReject(new Error('Malformed KWin response')); }
+        clearTimeout(timer);
+      } else if (msg.type === 'error' && !done) {
+        done = true; resultReject(new Error(String(msg.error))); clearTimeout(timer);
+      }
+    }
+  });
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', chunk => { stderr += chunk.slice(0, 500); });
+  child.on('error', err => {
+    if (!isReady) readyReject(err);
+    if (!done) { done = true; resultReject(err); }
+    clearTimeout(timer);
+  });
+  child.on('exit', code => {
+    const err = new Error('KWin reply bridge exited (' + code + '): ' + stderr.slice(0, 240));
+    if (!isReady) readyReject(err);
+    if (!done) { done = true; resultReject(err); }
+    clearTimeout(timer);
+  });
+  return { child, ready, result, stop: () => { clearTimeout(timer); if (!child.killed) child.kill(); } };
+}
+
 async function windowOps(args = {}) {
   if (!available()) throw new Error('KWin 6 Wayland scripting adapter unavailable');
   const action = String(args.action || 'list').toLowerCase();
@@ -104,34 +160,29 @@ async function windowOps(args = {}) {
   const spec = { action, id: String(args.window_id || ''), title: String(args.title || ''), limit: args.limit };
   if (action !== 'list' && !spec.id && !spec.title) throw new Error('window_id or title required');
   const dbus = executable('qdbus6') || executable('qdbus');
-  const journal = executable('journalctl');
   const nonce = crypto.randomBytes(12).toString('hex');
   const marker = 'AILINUX_KWIN_' + nonce + ':';
   const label = 'ailinux-helper-window-' + nonce;
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'ailinux-kwin-'));
   const scriptFile = path.join(folder, 'window.js');
-  fs.writeFileSync(scriptFile, buildScript(spec, marker), { mode: 0o600 });
-  let scriptId = '';
+  fs.writeFileSync(scriptFile, buildScript(spec, marker, nonce), { mode: 0o600 });
+  let scriptId = null;
+  const reply = startReply(nonce);
   try {
+    await reply.ready;
     const loaded = await run(dbus, ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.loadScript', scriptFile, label]);
     if (!loaded.ok) throw new Error('KWin loadScript failed: ' + (loaded.stderr || loaded.error).slice(0, 240));
-    const ids = loaded.stdout.trim().match(/\d+/g);
-    scriptId = ids && ids.length ? ids[ids.length - 1] : '';
-    if (!scriptId) throw new Error('KWin returned no script ID');
-    const since = new Date(Date.now() - 1000).toISOString();
-    const entry = '/Scripting/Script' + scriptId;
-    const started = await run(dbus, ['org.kde.KWin', entry, 'org.kde.kwin.Script.run']);
+    if (!/^\d+$/.test(loaded.stdout.trim())) throw new Error('KWin returned invalid script ID');
+    scriptId = loaded.stdout.trim();
+    const started = await run(dbus, ['org.kde.KWin', '/Scripting/Script' + scriptId, 'org.kde.kwin.Script.run']);
     if (!started.ok) throw new Error('KWin run failed: ' + (started.stderr || started.error).slice(0, 240));
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const logs = await run(journal, ['--user', '--since', since, '--no-pager', '--output=cat', '--grep=' + marker]);
-      const answer = parseOutput(logs.stdout, marker);
-      if (answer) return answer;
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-    throw new Error('KWin script returned no visible result (check user journal)');
+    const answer = await reply.result;
+    if (!answer || typeof answer.ok !== 'boolean') throw new Error('Invalid KWin result');
+    return answer;
   } finally {
-    if (scriptId) await run(dbus, ['org.kde.KWin', '/Scripting/Script' + scriptId, 'org.kde.kwin.Script.stop'], 3000);
-    await run(dbus, ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.unloadScript', label], 3000);
+    if (scriptId !== null) await run(dbus, ['org.kde.KWin', '/Scripting/Script' + scriptId, 'org.kde.kwin.Script.stop'], 3000);
+    if (scriptId !== null) await run(dbus, ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.unloadScript', label], 3000);
+    reply.stop();
     try { fs.rmSync(folder, { recursive: true, force: true }); } catch {}
   }
 }

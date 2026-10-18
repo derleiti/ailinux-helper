@@ -95,6 +95,10 @@
       {
         "from": "linux_portal_input.py",
         "to": "linux_portal_input.py"
+      },
+      {
+        "from": "kwin_dbus_reply.py",
+        "to": "kwin_dbus_reply.py"
       }
     ],
     "executableName": "ailinux-helper"
