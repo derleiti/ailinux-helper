@@ -561,7 +561,8 @@ test('WebMCP is externalized, self-hosted, and release-manifest pinned', () => {
   assert.equal(manifest.webmcp.pyodide.version, 'v314.0.6');
   assert.equal(manifest.webmcp.service_worker, 'sw.js');
   assert.match(serviceWorker, /new URL\(self\.location\.href\)/);
-  assert.match(serviceWorker, /ailinux-helper-'\+BUILD/);
+  assert.match(serviceWorker, /caches\.delete/);
+  assert.doesNotMatch(serviceWorker, /addEventListener\('fetch'/, 'control HTML must not be returned from stale offline caches');
   assert.doesNotMatch(serviceWorker, /2\.90\.29/);
   assert.equal(manifest.webmcp.threat_model.cloudflare_beacon_allowed, false);
   for (const [name, meta] of Object.entries(manifest.webmcp.pyodide.files)) {
@@ -621,4 +622,18 @@ test('android resume rejection preserves a pending one-time Share ID', () => {
   assert.match(resume403, /state\.clearResumeToken\(\)/);
   assert.match(resume403, /requestSocketTicket\(pair\)/);
   assert.doesNotMatch(resume403, /clearCredentials\(\)/);
+});
+
+
+test('Android and TV can pair with no capabilities without granting implicit tools', () => {
+  const androidRoot=path.join(__dirname,'..','..','android');
+  const main=fs.readFileSync(path.join(androidRoot,'app/src/main/java/me/ailinux/workspace/MainActivity.java'),'utf8');
+  const tv=fs.readFileSync(path.join(androidRoot,'tvapp/src/main/java/me/ailinux/workspace/TVMainActivity.java'),'utf8');
+  const protocol=fs.readFileSync(path.join(androidRoot,'app/src/main/java/me/ailinux/workspace/ProtocolClient.java'),'utf8');
+  assert.match(main,/Pairing without grants is allowed/);
+  assert.match(tv,/does not grant remote-control or vision rights/);
+  assert.match(protocol,/empty capability manifest is a valid, safe pairing state/);
+  assert.doesNotMatch(protocol,/Choose a workspace or enable a native share first/);
+  assert.match(protocol,/state\.tree\(\)!=null\)\{/);
+  assert.match(protocol,/if\(state\.tree\(\)!=null\)\{/);
 });

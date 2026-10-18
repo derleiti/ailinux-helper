@@ -10,6 +10,7 @@ const serviceRuntime = require('./service_runtime');
 const portableRuntime = require('./portable_runtime');
 const { DesktopLiveVision } = require('./live_vision');
 const bugReporter = require('./bug_reporter');
+const { installRestrictedDirectoryPolicy } = require('./file_picker_permissions');
 
 const APP_NAME = 'AILinux Helper';
 const START_URL = 'https://api.ailinux.me/v1/mcp';
@@ -556,6 +557,7 @@ function configureSession(ses) {
     const requestingUrl = details?.requestingUrl || details?.requestingOrigin || '';
     callback(trustedPermissions.has(permission) && isTrustedDocument(requestingUrl));
   });
+  installRestrictedDirectoryPolicy(ses, { isTrustedDocument, dialog, getWindow: () => window });
 }
 
 function trayImage() {
