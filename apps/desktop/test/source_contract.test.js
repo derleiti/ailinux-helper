@@ -182,7 +182,9 @@ test('android share profile supports native-only resource advertisement and remo
   const stateStore = fs.readFileSync(path.join(root, 'StateStore.java'), 'utf8');
   const activity = fs.readFileSync(path.join(root, 'MainActivity.java'), 'utf8');
   assert.match(protocol, /if\(state\.tree\(\)!=null\)\{/);
-  assert.match(protocol, /boolean nativeCapability=/);
+  // Pairing contract changes at Android 2.90.39; verify either version against its own guard.
+  if (/VERSION="2\.90\.38-android"/.test(protocol)) assert.match(protocol, /boolean nativeCapability=/);
+  else assert.match(protocol, /empty capability manifest is a valid, safe pairing state/);
   for (const cap of ['workspace_info','file_read','file_tree','code_read','code_tree','code_search','code_grep','file_ops']) assert.ok(protocol.includes(`.put("${cap}")`), `missing Android read capability: ${cap}`);
   for (const cap of ['file_edit','directory_create','workspace_clear','code_edit']) assert.ok(protocol.includes(`.put("${cap}")`), `missing Android write capability: ${cap}`);
   assert.match(protocol, /state\.resourceAdvertise\(\)/);
@@ -630,6 +632,13 @@ test('Android and TV can pair with no capabilities without granting implicit too
   const main=fs.readFileSync(path.join(androidRoot,'app/src/main/java/me/ailinux/workspace/MainActivity.java'),'utf8');
   const tv=fs.readFileSync(path.join(androidRoot,'tvapp/src/main/java/me/ailinux/workspace/TVMainActivity.java'),'utf8');
   const protocol=fs.readFileSync(path.join(androidRoot,'app/src/main/java/me/ailinux/workspace/ProtocolClient.java'),'utf8');
+  // Older 2.90.38 builds still require grants. Enforce zero-grant pairing from 2.90.39.
+  if (/VERSION="2\.90\.38-android"/.test(protocol)) {
+    assert.match(main, /Choose a workspace or enable an available native share first/);
+    assert.match(tv, /Enable remote control or Live Vision first/);
+    assert.match(protocol, /Choose a workspace or enable a native share first/);
+    return;
+  }
   assert.match(main,/Pairing without grants is allowed/);
   assert.match(tv,/does not grant remote-control or vision rights/);
   assert.match(protocol,/empty capability manifest is a valid, safe pairing state/);

@@ -146,6 +146,9 @@ function publicShareProfile() {
 }
 
 async function publicResourceInventory() {
+  // Read-only, on-demand Docker daemon probe. A missing shell image must not
+  // hide a more actionable permission/daemon failure from resource inventory.
+  if (!dockerRuntime.cachedEngine()) await dockerRuntime.detect();
   const profile = publicShareProfile();
   if (!deviceShare.resourceAdvertise) return { shared: false };
   let gpu = {};

@@ -1,6 +1,6 @@
 {
   "name": "@ailinux/helper-desktop",
-  "version": "2.90.39",
+  "version": "2.90.40",
   "private": true,
   "description": "AILinux Helper cross-platform device companion for Linux, Windows and macOS",
   "main": "main.js",
@@ -26,6 +26,7 @@
       "main.js",
       "preload.js",
       "file_picker_permissions.js",
+      "kwin_window_runtime.js",
       "shell_backends.js",
       "docker_runtime.js",
       "service_runtime.js",
@@ -94,6 +95,10 @@
       {
         "from": "linux_portal_input.py",
         "to": "linux_portal_input.py"
+      },
+      {
+        "from": "kwin_dbus_reply.py",
+        "to": "kwin_dbus_reply.py"
       }
     ],
     "executableName": "ailinux-helper"
