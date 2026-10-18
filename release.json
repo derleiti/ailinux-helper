@@ -14,7 +14,8 @@
       "filename": "ailinux-helper-2.90.34-android-arm64",
       "media_type": "application/octet-stream",
       "sha256": "121665a71b1d2e6bfade837b805a432fee3f647a10a2cfc93976b55b20f0689a",
-      "size": 1769825
+      "size": 1769825,
+      "version": "2.90.34"
     },
     "android-tv": {
       "filename": "AILinux-Helper-2.90.38-android-tv.apk",
@@ -27,84 +28,97 @@
       "filename": "ailinux-helper-capsule-2.90.34-1-x86_64.pkg.tar.zst",
       "media_type": "application/zstd",
       "sha256": "1096eb01187961e755a4f1e656032d8b19ad2610a23301668bc431a777b7d670",
-      "size": 707811
+      "size": 707811,
+      "version": "2.90.34"
     },
     "freebsd": {
       "filename": "ailinux-helper-2.90.34-freebsd-x86_64",
       "media_type": "application/octet-stream",
       "sha256": "7ad6af013ad07753a3adfd094bdb690325dd97088af5e7f55d03ea1b8c6b6943",
-      "size": 9183426
+      "size": 9183426,
+      "version": "2.90.34"
     },
     "ios": {
       "filename": "ailinux-helper-2.90.34-ios-unsigned.ipa",
       "media_type": "application/octet-stream",
       "sha256": "3c734f25f147bf5f9fdfd6463dc8948b4b8d74930358badd2ecb8fc61d9283a1",
-      "size": 7368651
+      "size": 7368651,
+      "version": "2.90.34"
     },
     "ios-simulator": {
       "filename": "ailinux-helper-2.90.34-ios-simulator.app.zip",
       "media_type": "application/zip",
       "sha256": "f0e60ebab08c4ebab1cf8d7edc172b391007938ae27181aaf0d977d445457845",
-      "size": 7370455
+      "size": 7370455,
+      "version": "2.90.34"
     },
     "linux-appimage": {
-      "filename": "AILinux-Helper-2.90.34-linux-x86_64.AppImage",
+      "filename": "AILinux-Helper-2.90.39-linux-x86_64.AppImage",
       "media_type": "application/vnd.appimage",
-      "sha256": "00df6d75b767e0e4aa82f4685045b428bfe207a15e4e10fa90846fb9ce294ef7",
-      "size": 124925018
+      "sha256": "3ed98a30d3537e61d9572af4b55d980b93c7ec55a4a2a09a8eec4d630cacd94c",
+      "size": 124925042,
+      "version": "2.90.39"
     },
     "linux-binary": {
       "filename": "ailinux-helper-2.90.34-linux-x86_64",
       "media_type": "application/octet-stream",
       "sha256": "6e7e25baf5f83316cc54f6223b69993c6383a85e60ed22303a873c9a5a596028",
-      "size": 9248952
+      "size": 9248952,
+      "version": "2.90.34"
     },
     "linux-deb": {
-      "filename": "AILinux-Helper-2.90.34-linux-amd64.deb",
+      "filename": "AILinux-Helper-2.90.39-linux-amd64.deb",
       "media_type": "application/vnd.debian.binary-package",
-      "sha256": "9e9051088f33aed395cf8adb4dcdf0ed7da7804e22de4cc79dd81fa63c56200d",
-      "size": 98825132
+      "sha256": "242b10562ca52144e1a9b3d3e0d80dffd03c33e9d2346777f690e0c7b7931c7f",
+      "size": 99295416,
+      "version": "2.90.39"
     },
     "macos": {
       "filename": "AILinux-Helper-2.90.34-mac-arm64.dmg",
       "media_type": "application/x-apple-diskimage",
       "sha256": "43f14eea09653ff385ea1933863d42dcdbee7ce42a327a45bbd17858b95091eb",
-      "size": 127506839
+      "size": 127506839,
+      "version": "2.90.34"
     },
     "macos-pkg": {
       "filename": "ailinux-helper-2.90.34-macos.pkg",
       "media_type": "application/vnd.apple.installer+xml",
       "sha256": "fd1cfb12ce5db02ff88a6af1a7c7091d953add5fbba20b2cff809a3c931c0982",
-      "size": 16387550
+      "size": 16387550,
+      "version": "2.90.34"
     },
     "macos-universal": {
       "filename": "ailinux-helper-2.90.34-macos-universal",
       "media_type": "application/octet-stream",
       "sha256": "91846c0db0cf25847d8ff19d613d8f5d7148218c8444e1dc5be7cf2a2b78fa78",
-      "size": 18546994
+      "size": 18546994,
+      "version": "2.90.34"
     },
     "openbsd": {
       "filename": "ailinux-helper-2.90.34-openbsd-x86_64",
       "media_type": "application/octet-stream",
       "sha256": "e8289e970cf32faa44d85f1ae174a4e6b1bd8520954bd8d395f1faeaaa77e359",
-      "size": 9204024
+      "size": 9204024,
+      "version": "2.90.34"
     },
     "windows": {
       "filename": "AILinux-Helper-2.90.34-win-x64.exe",
       "media_type": "application/vnd.microsoft.portable-executable",
       "sha256": "66ebf31e7406ede530ce32c9926bb2fe2dfdecb96cff2be91f8c9e9ade0c9e5a",
-      "size": 111568739
+      "size": 111568739,
+      "version": "2.90.34"
     },
     "windows-capsule": {
       "filename": "ailinux-helper-2.90.34-windows-x86_64.exe",
       "media_type": "application/vnd.microsoft.portable-executable",
       "sha256": "0ea5307e9ce22861ff56e07fa508beda36b76b9de37425c5ceacf02740f293b6",
-      "size": 9319424
+      "size": 9319424,
+      "version": "2.90.34"
     }
   },
-  "helper_version": "2.90.34",
+  "helper_version": "2.90.39",
   "schema_version": 1,
-  "source_tag": "v2.90.34",
+  "source_tag": "v2.90.39",
   "webmcp": {
     "pyodide": {
       "base_path": "/v1/mcp/pyodide/v314.0.6/",
