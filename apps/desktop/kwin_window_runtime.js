@@ -5,7 +5,7 @@
  * Executes only a fixed KWin script (no caller-provided code), and returns
  * its result over a unique, nonce-bound D-Bus reply endpoint. Mutations remain MCP-gated.
  */
-const { execFile, spawn } = require('node:child_process');
+const { execFile, execFileSync, spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -21,13 +21,25 @@ function executable(name, env = process.env) {
   return '';
 }
 
+let kwinProbe = { at: 0, bus: '', ok: false };
 function available({ env = process.env, platform = process.platform } = {}) {
-  const kde = /(?:^|:)(?:KDE|Plasma)(?::|$)/i.test(String(env.XDG_CURRENT_DESKTOP || ''))
-    || /^(true|1)$/i.test(String(env.KDE_FULL_SESSION || ''));
   const wayland = String(env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' || Boolean(env.WAYLAND_DISPLAY);
-  return platform === 'linux' && kde && wayland
-    && Boolean(executable('qdbus6', env) || executable('qdbus', env))
-    && fs.existsSync('/usr/bin/python3');
+  if (platform !== 'linux' || !wayland || !fs.existsSync('/usr/bin/python3')) return false;
+  const dbus = executable('qdbus6', env) || executable('qdbus', env);
+  if (!dbus) return false;
+  // AppImages launched from SSH/systemd often lack XDG_CURRENT_DESKTOP=KDE.
+  // Probe the real KWin session service instead of trusting environment labels.
+  const bus = String(env.DBUS_SESSION_BUS_ADDRESS || '') + '|' + dbus;
+  if (env === process.env && kwinProbe.bus === bus && Date.now() - kwinProbe.at < 10000) return kwinProbe.ok;
+  let ok = false;
+  try {
+    execFileSync(dbus, ['org.kde.KWin', '/Scripting',
+      'org.kde.kwin.Scripting.isScriptLoaded', 'ailinux-helper-capability-probe'],
+    { timeout: 2000, env, stdio: 'ignore' });
+    ok = true;
+  } catch { /* no accessible KWin service: fail closed */ }
+  if (env === process.env) kwinProbe = { at: Date.now(), bus, ok };
+  return ok;
 }
 
 function run(file, args, timeout = 5000) {
