@@ -8,6 +8,7 @@ const { execFile, execFileSync, spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const kwinWindowRuntime = require('./kwin_window_runtime');
 
 const SERVICE_RE = /^[A-Za-z0-9_.@:-]{1,256}$/;
 const MAX_OUTPUT = 128 * 1024;
@@ -162,6 +163,7 @@ function portalComputerInput(args = {}) {
 function windowAdapter() {
   if (process.platform === 'darwin') return which('osascript') ? 'osascript' : '';
   if (process.platform === 'win32') return powershell() ? 'powershell' : '';
+  if (linuxWaylandSession()) return kwinWindowRuntime.available() ? 'kwin6-dbus' : '';
   return which('xdotool') ? 'xdotool' : (which('wmctrl') ? 'wmctrl' : '');
 }
 function inputAdapter() {
@@ -301,6 +303,7 @@ async function appOps(args = {}) {
       : 'Get-Process -Name $args[0] -ErrorAction Stop|ForEach-Object{$_.CloseMainWindow()|Out-Null}';
     return run(ps, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script, appName]);
   }
+  if (linuxWaylandSession() && kwinWindowRuntime.available()) return kwinWindowRuntime.windowOps({ action, title: appName });
   const xdotool = which('xdotool');
   if (action === 'focus' && xdotool) return run(xdotool, ['search', '--onlyvisible', '--name', appName, 'windowactivate']);
   if (action === 'close' && xdotool) return run(xdotool, ['search', '--onlyvisible', '--name', appName, 'windowclose']);
@@ -319,6 +322,7 @@ async function windowOps(args = {}) {
   const id = String(args.window_id || '').trim(), title = String(args.title || '').trim();
   if (!['list', 'focus', 'close', 'minimize', 'maximize'].includes(action)) throw new Error('unsupported window action');
   if (process.platform === 'linux') {
+    if (linuxWaylandSession()) return kwinWindowRuntime.windowOps(args);
     const xdotool = which('xdotool'); if (!xdotool) throw new Error('window control unavailable: install/enable a compatible xdotool adapter for this session');
     if (action === 'list') {
       const ids = await linuxWindowIds(title || '.'); const windows = [];
