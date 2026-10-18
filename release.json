@@ -53,11 +53,11 @@
       "version": "2.90.34"
     },
     "linux-appimage": {
-      "filename": "AILinux-Helper-2.90.39-linux-x86_64.AppImage",
+      "filename": "AILinux-Helper-2.90.40-linux-x86_64.AppImage",
       "media_type": "application/vnd.appimage",
-      "sha256": "3ed98a30d3537e61d9572af4b55d980b93c7ec55a4a2a09a8eec4d630cacd94c",
-      "size": 124925042,
-      "version": "2.90.39"
+      "sha256": "5a74c48e70a1755da03ec3a251962b4e09192f36e15c63ae0f52e311461b3c1e",
+      "size": 124929137,
+      "version": "2.90.40"
     },
     "linux-binary": {
       "filename": "ailinux-helper-2.90.34-linux-x86_64",
@@ -67,11 +67,11 @@
       "version": "2.90.34"
     },
     "linux-deb": {
-      "filename": "AILinux-Helper-2.90.39-linux-amd64.deb",
+      "filename": "AILinux-Helper-2.90.40-linux-amd64.deb",
       "media_type": "application/vnd.debian.binary-package",
-      "sha256": "242b10562ca52144e1a9b3d3e0d80dffd03c33e9d2346777f690e0c7b7931c7f",
-      "size": 99295416,
-      "version": "2.90.39"
+      "sha256": "470df96ae15143d30dab8ae6bb3e3089ae0622151249ab8df7971b7b4bdabbd8",
+      "size": 99296972,
+      "version": "2.90.40"
     },
     "macos": {
       "filename": "AILinux-Helper-2.90.34-mac-arm64.dmg",
@@ -116,9 +116,9 @@
       "version": "2.90.34"
     }
   },
-  "helper_version": "2.90.39",
+  "helper_version": "2.90.40",
   "schema_version": 1,
-  "source_tag": "v2.90.39",
+  "source_tag": "linux-v2.90.40",
   "webmcp": {
     "pyodide": {
       "base_path": "/v1/mcp/pyodide/v314.0.6/",
