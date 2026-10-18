@@ -31,11 +31,19 @@ test('bounded KWin script accepts only documented window operations', () => {
   assert.ok(!bridge.buildScript({action:'list',limit:20000},'M:').includes('"limit":20000'));
 });
 
-test('window result parsing ignores irrelevant journal content', () => {
+test('legacy result parsing ignores unrelated text', () => {
   const marker='AILINUX_KWIN_n0nce:';
   const result=bridge.parseOutput('prefix\njs: '+marker+'{"ok":true,"windows":[{"id":"abc","title":"KDE"}]}\n',marker);
   assert.equal(result.ok,true);
   assert.equal(result.windows[0].id,'abc');
   assert.equal(bridge.parseOutput('unrelated entry','M:'),null);
   assert.equal(bridge.parseOutput('M:{malformed','M:'),null);
+});
+
+test('KWin bridge replies over a nonce-bound DBus endpoint, without relying on journald', () => {
+  const script=bridge.buildScript({action:'list'},'M:','0123456789abcdef01234567');
+  assert.match(script,/callDBus/);
+  assert.match(script,/me\.ailinux\.KWinHelper\.n0123456789abcdef01234567/);
+  assert.match(script,/JSON\.stringify\(result\)/);
+  assert.doesNotMatch(script,/print\(marker/);
 });
