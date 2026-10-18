@@ -26,6 +26,7 @@
       "main.js",
       "preload.js",
       "file_picker_permissions.js",
+      "kwin_window_runtime.js",
       "shell_backends.js",
       "docker_runtime.js",
       "service_runtime.js",
