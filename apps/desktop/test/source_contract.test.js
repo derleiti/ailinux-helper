@@ -182,7 +182,7 @@ test('android share profile supports native-only resource advertisement and remo
   const stateStore = fs.readFileSync(path.join(root, 'StateStore.java'), 'utf8');
   const activity = fs.readFileSync(path.join(root, 'MainActivity.java'), 'utf8');
   assert.match(protocol, /if\(state\.tree\(\)!=null\)\{/);
-  assert.match(protocol, /boolean nativeCapability=/);
+  assert.match(protocol, /empty capability manifest is a valid, safe pairing state/);
   for (const cap of ['workspace_info','file_read','file_tree','code_read','code_tree','code_search','code_grep','file_ops']) assert.ok(protocol.includes(`.put("${cap}")`), `missing Android read capability: ${cap}`);
   for (const cap of ['file_edit','directory_create','workspace_clear','code_edit']) assert.ok(protocol.includes(`.put("${cap}")`), `missing Android write capability: ${cap}`);
   assert.match(protocol, /state\.resourceAdvertise\(\)/);
