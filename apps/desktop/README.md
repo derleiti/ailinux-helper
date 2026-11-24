@@ -29,3 +29,21 @@ npm run dist:mac
 ```
 
 Cross-platform release builds are produced by `.github/workflows/workspace-desktop-helper.yml`. Closing the window hides it to the tray; use **Quit AILinux Workspace** from the tray to terminate it.
+
+
+## Linux packaging validation (2.90.41)
+
+Run `npm run dist:linux -- --publish never`. The wrapper sets a reproducible
+umask, stages the public desktop icon, and validates each generated DEB.
+The Linux-only afterPack hook restores ordinary-user read/traverse/execute
+access to the packaged application without following symlinks.
+The validator checks the actual DEB payload, not just the staging directory:
+
+```sh
+python3 ../../scripts/verify-linux-deb.py dist/AILinux-Helper-2.90.41-linux-amd64.deb --version 2.90.41
+```
+
+Do not publish an existing version with a changed hash. Keep release.json at
+the last verified public release until the candidate has passed ordinary-user
+installation, upgrade, native startup and pairing tests and the artifacts
+are available through their distribution channels.
