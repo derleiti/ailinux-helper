@@ -34,7 +34,7 @@ Cross-platform release builds are produced by `.github/workflows/workspace-deskt
 ## Linux packaging validation (2.90.41)
 
 Run `npm run dist:linux -- --publish never`. The wrapper sets a reproducible
-umask, stages the public desktop icon, and validates each generated DEB.
+umask and stages the public desktop icon. An afterAllArtifactBuild hook validates each actual DEB produced by the current build, including output directory overrides.
 The Linux-only afterPack hook restores ordinary-user read/traverse/execute
 access to the packaged application without following symlinks.
 The validator checks the actual DEB payload, not just the staging directory:
