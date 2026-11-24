@@ -197,11 +197,7 @@ public final class TVMainActivity extends Activity {
     }
 
     private void generatePair() {
-        if (!(state.computerControl() && DeviceControlService.isReady())
-                && !state.screenObserve()) {
-            status.setText("Enable remote control or Live Vision first.");
-            return;
-        }
+        // Generating a Share ID does not grant remote-control or vision rights.
         state.clearCredentials();
         pair.setText("Requesting Share ID…");
         startExecutor(WorkspaceService.ACTION_NEW_PAIR);

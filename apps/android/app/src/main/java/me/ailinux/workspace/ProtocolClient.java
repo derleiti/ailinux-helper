@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 final class ProtocolClient extends WebSocketListener {
     interface Listener { void onState(String state); void onResumeToken(String token); void onPairCode(String code); }
-    static final String VERSION="2.90.38-android";
+    static final String VERSION="2.90.39-android";
     static final String BASE="https://api.ailinux.me";
     private static final String TAG="AILinuxWorkspace";
     private final Context context; private final StateStore state; private final Listener listener;
@@ -47,8 +47,8 @@ final class ProtocolClient extends WebSocketListener {
     private JSONObject nativeShareProfile()throws Exception{JSONObject resources=new JSONObject().put("advertise",state.resourceAdvertise());if(state.resourceAdvertise())resources.put("inventory",deviceResources());boolean display=state.screenObserve()&&screenCapture!=null&&screenCapture.isReady();boolean controlRequested=state.computerControl();boolean accessibilityReady=DeviceControlService.isReady();boolean control=controlRequested&&accessibilityReady;return new JSONObject().put("visibility",state.visibility()).put("clipboard",new JSONObject().put("read",state.clipboardRead()).put("write",state.clipboardWrite())).put("display",new JSONObject().put("observe",display).put("control",control)).put("device",new JSONObject().put("observe",false).put("requested",controlRequested).put("accessibility_ready",accessibilityReady).put("control",control)).put("resources",resources).put("compute",new JSONObject().put("remote_requested",state.remoteCompute()).put("runtime","triforce_docker").put("available",state.remoteCompute()).put("ephemeral",true).put("internet","public_only").put("workspace_path","~/workspace"));}
     private void connect(){
         if(stopped.get()||!connecting.compareAndSet(false,true))return;
-        boolean nativeCapability=(state.screenObserve()&&screenCapture!=null&&screenCapture.isReady())||state.clipboardRead()||state.clipboardWrite()||(state.computerControl()&&DeviceControlService.isReady());
-        if(state.tree()==null&&!state.resourceAdvertise()&&!state.remoteCompute()&&!nativeCapability){connecting.set(false);listener.onState("Choose a workspace or enable a native share first");return;}
+        // An empty capability manifest is a valid, safe pairing state.
+        // Nothing becomes executable until the user explicitly grants it.
         workspace=null;
         if(state.tree()!=null){try{workspace=new SafWorkspace(context,state.tree(),"write".equals(state.mode()));}
         catch(Exception e){connecting.set(false);listener.onState("Workspace unavailable: "+e.getMessage());return;}}
